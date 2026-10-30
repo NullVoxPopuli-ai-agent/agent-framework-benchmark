@@ -118,7 +118,8 @@ Start it with `npm run api` from the repo root. It listens on `http://localhost:
 - **Pagination**, where a page says a list is paged: below the table, the text
   `Page <n> of <total pages>` plus links named `Previous page` and `Next page` to the
   neighbouring pages. Leave out `Previous page` on the first page and `Next page` on the
-  last. The page number is in the URL query as `page` (1-based, omitted for page 1).
+  last (the text stays, even as `Page 1 of 1`). The page number is in the URL query as
+  `page` (1-based, omitted for page 1).
 - **Filters** are native form controls with visible labels. Their state lives in the URL
   query, under the API's parameter names and values (`?source=wild&generation=generation-i`).
   Changing a filter updates the URL (pushing or replacing a history entry) and goes back
@@ -135,7 +136,8 @@ images.** They're simple on purpose:
   each item's label to the left of its bar. A **column chart** has one vertical column per
   item, left to right in time order, with the labels below.
 - The chart is an `<svg>` element with `role="img"` whose accessible name is the chart's
-  title.
+  title. Assistive technology doesn't see inside an element with `role="img"`, so labels
+  that are links must be outside the `<svg>` (for example, an HTML list laid out beside it).
 - Each item is drawn as exactly one `<rect>`, with a `<title>` child reading
   `<label>: <value>` (`Red: 96.0%`, `2026-10: 646`), formatted per the conventions.
   Other shapes (axes, gridlines, backgrounds) are fine but mustn't be `<rect>`s with a
@@ -258,6 +260,7 @@ images.** They're simple on purpose:
 - Section `Recent trades`: data table `Recent trades with <name>` with their 10 newest
   trades. Columns: `Date` (a link to the trade's page), `Game`, `Gave`, `Received`
   (Pokémon links). Then a link named `All trades with <name>` to `/trades?friend=<id>`.
+  With no trades, the text `No trades yet` instead of the table.
 
 ### `/trades` – Trades
 
@@ -287,14 +290,15 @@ images.** They're simple on purpose:
 - `h1`: `Log a trade`.
 - A form with these labelled fields:
   - `<select>` `Friend`: every friend, by name.
-  - `<select>` `Game`: Robin's owned games.
+  - `<select>` `Game`: Robin's owned games, the first one selected.
   - `You gave` and `You received`: text inputs (or comboboxes) that take a species'
     English name, case-insensitively (`bulbasaur`, `Mr. Mime`). Suggestions as you type
     are welcome but not required.
   - `Date`: a date input defaulting to the data's current date.
 - A submit button named `Log trade`. On success, go to the new trade's page. If the API
   rejects the trade, or a species name doesn't match any species, stay on the form and
-  show the reason in an element with the `alert` role.
+  show the reason in an element with the `alert` role. Browser validation may stop an
+  empty field, but a filled-in form must always reach that check.
 
 ### `/hunts` – Shiny hunts
 
@@ -304,7 +308,7 @@ images.** They're simple on purpose:
     `Completed` (`completed`), `Failed` (`failed`).
   - `<select>` labelled `Sort`: `Newest first` (`-started`), `Most encounters`
     (`encounters`).
-- The text `<total> hunts`.
+- The text `<total> hunts`. With no results, `No hunts` in place of the table.
 - Data table `Hunts`, 25 per page with pagination. Columns: `Pokémon` (sprite and a link
   named with the species' name to the hunt's page, `/hunts/<id>`), `Game`, `Method`,
   `Started`, `Ended`, `Status` (`Active`, `Completed` or `Failed`), `Encounters`.
@@ -358,7 +362,7 @@ tables may scroll sideways.
 | `needs` | `/needs` |
 | `catches` | `/catches?shiny=true` |
 | `games` | `/games` |
-| `game` | `/games/red` |
+| `game` | `/games/blue` |
 | `friends` | `/friends?sort=trades` |
 | `friend` | `/friends/1` |
 | `trades` | `/trades` |

@@ -23,7 +23,7 @@ export const PAGES = {
     needs: '/needs',
     catches: '/catches?shiny=true',
     games: '/games',
-    game: '/games/red',
+    game: '/games/blue',
     friends: '/friends?sort=trades',
     friend: '/friends/1',
     trades: '/trades',
