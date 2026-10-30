@@ -2,7 +2,7 @@
 // the API, the way it would be deployed. Used by measure.mjs.
 //
 //   https://app.localhost:8443  -> app on :3200
-//   https://api.localhost:8444  -> API on :9200 (normal data, no overlay, no latency)
+//   https://api.localhost:8444  -> API on :9200 (normal data, no overlay)
 
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -11,7 +11,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const BENCH = path.dirname(fileURLToPath(import.meta.url));
-export const TEMPLATE = process.env.TEMPLATE_DIR ?? path.resolve(BENCH, '../template');
 export const APP_ORIGIN = 'https://app.localhost:8443';
 export const API_ORIGIN = 'https://api.localhost:8444';
 export const APP_PORT = 3200;
@@ -76,9 +75,9 @@ async function waitFor(url, child, timeoutMs = 60_000) {
   throw new Error(`${child.label} not ready at ${url}:\n${child.log()}`);
 }
 
-// Starts Caddy and the API, installs and builds the app, then starts it.
-// Returns { chromeCertFlag, stop }.
-export async function startStack(appDir, { build = true } = {}) {
+// Starts Caddy and the API from the scenario's template, installs and builds the app, then
+// starts it. apiEnv adds to the API's environment. Returns { chromeCertFlag, stop }.
+export async function startStack(appDir, { template, apiEnv = {}, build = true }) {
   fs.mkdirSync(CADDY_DIR, { recursive: true });
   const caddyfile = path.join(CADDY_DIR, 'Caddyfile');
   fs.writeFileSync(caddyfile, CADDYFILE);
@@ -87,11 +86,11 @@ export async function startStack(appDir, { build = true } = {}) {
   try {
     const caddy = start('Caddy', 'caddy', ['run', '--config', caddyfile, '--adapter', 'caddyfile']);
     procs.push(caddy);
-    const api = start('API', process.execPath, [path.join(TEMPLATE, 'api/server.mjs')], {
-      env: { ...process.env, PORT: String(API_PORT), PUBLIC_URL: API_ORIGIN, LATENCY_MS: '0', API_OVERLAY: '' },
+    const api = start('API', process.execPath, [path.join(template, 'api/server.mjs')], {
+      env: { ...process.env, PORT: String(API_PORT), PUBLIC_URL: API_ORIGIN, API_OVERLAY: '', ...apiEnv },
     });
     procs.push(api);
-    await waitFor(`http://localhost:${API_PORT}/api/v2/`, api);
+    await waitFor(`http://localhost:${API_PORT}/`, api);
     // Caddy creates its local CA on first start; Node needs it to call the API over HTTPS.
     for (let i = 0; i < 40 && !fs.existsSync(CADDY_ROOT_CERT); i++) await new Promise((r) => setTimeout(r, 250));
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Runs the Pokédex framework benchmark end to end with Podman:
 //
-//   1. Builds three images from scratch: pokedex-base (Ubuntu, Node, Chromium, the exported
-//      template repo and its data), pokedex-agent (+ Claude Code, agent-browser) and
-//      pokedex-measure (+ Caddy, Lighthouse and the measurement scripts).
+//   1. Builds three images from scratch: <scenario>-base (Ubuntu, Node, Chromium, the exported
+//      template repo and its data), <scenario>-agent (+ Claude Code, agent-browser) and
+//      <scenario>-measure (+ Caddy, Lighthouse and the measurement scripts).
 //   2. For every framework x iteration, one at a time, runs one agent in its own
-//      pokedex-agent container. The agent gets the prompt from frameworks.mjs and nothing
-//      else. When it stops, the original tests run against its app/ in a fresh pokedex-base
+//      <scenario>-agent container. The agent gets the prompt from frameworks.mjs and nothing
+//      else. When it stops, the original tests run against its app/ in a fresh <scenario>-base
 //      container, so nothing else the agent changed can affect them.
-//   3. Measures each agent's app, one at a time, in a pokedex-measure container.
+//   3. Measures each agent's app, one at a time, in a <scenario>-measure container.
 //   4. Writes runs/<id>/report.md.
 //
 // Nothing here runs agent-written code on the host: agents and their apps only ever run
@@ -20,6 +20,9 @@
 //   node bench/run.mjs --measure-only=runs/<id>     re-measure and re-report an earlier run
 //   node bench/run.mjs --report-only=runs/<id>      only regenerate report.md
 // Options:
+//   --scenario=NAME         the app to build: a directory in scenarios/ (default pokedex).
+//                           Runs given with --append-to, --measure-only or --report-only keep
+//                           the scenario recorded in their config.json
 //   --frameworks=a,b|all    frameworks to test (keys in bench/frameworks.mjs)
 //   --iterations=N          agent runs per framework (default 1)
 //   --model=ID              model passed to `claude --model` (default claude-opus-5-5)
@@ -50,9 +53,6 @@ import { readRunInfo, writeReport } from './report.mjs';
 
 const BENCH = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(BENCH, '..');
-const IMAGES = { base: 'pokedex-base', agent: 'pokedex-agent', measure: 'pokedex-measure' };
-// Exact Node version for every container (npm comes bundled with it). The root .nvmrc links here.
-const NODE_VERSION = fs.readFileSync(path.join(ROOT, 'template/.nvmrc'), 'utf8').trim();
 
 // ---------- Options ----------
 
@@ -67,6 +67,22 @@ function parseArgs(argv) {
 }
 
 const opts = parseArgs(process.argv.slice(2));
+
+// The scenario of an existing run is the one in its config.json (runs from before scenarios
+// existed are pokedex runs).
+const existingRun = opts['append-to'] ?? opts['measure-only'] ?? opts['report-only'];
+const recordedScenario = (dir) => {
+  const file = path.join(path.resolve(dir), 'config.json');
+  return (fs.existsSync(file) && JSON.parse(fs.readFileSync(file, 'utf8')).scenario) || 'pokedex';
+};
+const SCENARIO = existingRun && existingRun !== true ? recordedScenario(existingRun) : (opts.scenario ?? 'pokedex');
+if (opts.scenario && opts.scenario !== SCENARIO) throw new Error(`${existingRun} is a ${SCENARIO} run, not ${opts.scenario}`);
+const TEMPLATE = path.join(ROOT, 'scenarios', SCENARIO, 'template');
+if (!fs.existsSync(TEMPLATE)) throw new Error(`Unknown scenario ${SCENARIO}: no ${path.relative(ROOT, TEMPLATE)}`);
+const IMAGES = { base: `${SCENARIO}-base`, agent: `${SCENARIO}-agent`, measure: `${SCENARIO}-measure` };
+// Exact Node version for every container (npm comes bundled with it). The root .nvmrc links
+// to the pokedex one.
+const NODE_VERSION = fs.readFileSync(path.join(TEMPLATE, '.nvmrc'), 'utf8').trim();
 const num = (key, fallback) => {
   if (opts[key] === undefined) return fallback;
   const n = Number(opts[key]);
@@ -151,7 +167,7 @@ function buildImages(runDir, { agent = true, key = agent ? 'images' : 'measureOn
   const ctx = path.join(runDir, '.build');
   fs.rmSync(ctx, { recursive: true, force: true });
   fs.mkdirSync(ctx, { recursive: true });
-  sh(path.join(BENCH, 'container/export-template.sh'), [path.join(ctx, 'work')]);
+  sh(path.join(BENCH, 'container/export-template.sh'), [TEMPLATE, path.join(ctx, 'work')]);
   const cacheArgs = opts['no-cache'] ? ['--no-cache', '--pull=always'] : [];
   const build = (image, file, context, buildArgs = []) => {
     log(`Building ${image}`);
@@ -195,7 +211,7 @@ function recordImages(runDir, key, images) {
 async function runAgent(runId, iterDir, framework, credential) {
   const out = path.join(iterDir, 'agent');
   writableDir(out);
-  const name = `pokedex-${runId}-${path.basename(iterDir)}`;
+  const name = `${SCENARIO}-${runId}-${path.basename(iterDir)}`;
   const args = [
     'run', '--rm', '--name', name, ...containerArgs, ...blockPokeapi,
     '-v', `${out}:/out:Z`,
@@ -286,7 +302,7 @@ async function measure(iterDir) {
     [
       'run', '--rm', ...containerArgs,
       '-v', `${repo}:/repo:Z`, '-v', `${results}:/results:Z`,
-      IMAGES.measure, '/repo/app', '/results', '--runs', String(config.lighthouseRuns),
+      IMAGES.measure, '/repo/app', '/results', '--runs', String(config.lighthouseRuns), '--scenario', SCENARIO,
     ],
     path.join(results, 'measure.log'),
   );
@@ -338,6 +354,7 @@ async function main() {
   const runDir = appendTo || path.resolve(opts.out ?? path.join(ROOT, 'runs'), runId);
   const configFile = path.join(runDir, 'config.json');
   const batch = {
+    scenario: SCENARIO,
     ...config,
     frameworks,
     prompts: Object.fromEntries(frameworks.map((f) => [f, prompt(FRAMEWORKS[f])])),
@@ -357,7 +374,7 @@ async function main() {
   }
   fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(configFile, JSON.stringify(runConfig, null, 2));
-  log(`Run ${runId}: ${frameworks.join(', ')} x ${config.iterations} -> ${runDir}`);
+  log(`Run ${runId} (${SCENARIO}): ${frameworks.join(', ')} x ${config.iterations} -> ${runDir}`);
 
   if (!opts['skip-image-build']) buildImages(runDir, appendTo ? { key: `${appendKey}-images` } : {});
   await runAgents(runId, runDir, frameworks, credential);

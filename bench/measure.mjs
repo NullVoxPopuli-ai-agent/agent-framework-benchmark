@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Measures one implementation: node bench/measure.mjs <appDir> <outDir> [--runs N] [--skip-build]
+// Measures one implementation:
+//   node bench/measure.mjs <appDir> <outDir> [--runs N] [--scenario NAME] [--skip-build]
 // Writes <outDir>/results.json, plus the first Lighthouse report of each URL.
 
 import fs from 'node:fs';
@@ -8,15 +9,20 @@ import { spawnSync } from 'node:child_process';
 import lighthouse from 'lighthouse';
 import * as chromeLauncher from 'chrome-launcher';
 import { chromium } from 'playwright';
-import { startStack, APP_ORIGIN, APP_PORT, TEMPLATE } from './stack.mjs';
+import { fileURLToPath } from 'node:url';
+import { startStack, APP_ORIGIN, APP_PORT } from './stack.mjs';
 
 const args = process.argv.slice(2);
-const [appDirArg, outArg] = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--runs');
+const valueOf = (flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
+const [appDirArg, outArg] = args.filter((a, i) => !a.startsWith('--') && !['--runs', '--scenario'].includes(args[i - 1]));
 if (!appDirArg || !outArg) {
-  console.error('Usage: measure.mjs <appDir> <outDir> [--runs N] [--skip-build]');
+  console.error('Usage: measure.mjs <appDir> <outDir> [--runs N] [--scenario NAME] [--skip-build]');
   process.exit(1);
 }
-const RUNS = Number(args[args.indexOf('--runs') + 1]) || 5;
+const RUNS = Number(valueOf('--runs')) || 5;
+const SCENARIO = valueOf('--scenario') ?? 'pokedex';
+// In the measure image, the scenario's exported template is at TEMPLATE_DIR.
+const TEMPLATE = process.env.TEMPLATE_DIR ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../scenarios', SCENARIO, 'template');
 const appDir = path.resolve(appDirArg);
 const out = path.resolve(outArg);
 fs.mkdirSync(path.join(out, 'lighthouse'), { recursive: true });
@@ -133,7 +139,7 @@ function codeStats() {
 
 const results = { appDir, measuredAt: new Date().toISOString(), runs: RUNS };
 console.log(`Measuring ${appDir}`);
-const stack = await startStack(appDir, { build: !args.includes('--skip-build') });
+const stack = await startStack(appDir, { template: TEMPLATE, apiEnv: { LATENCY_MS: '0' }, build: !args.includes('--skip-build') });
 CHROME_FLAGS.push(stack.chromeCertFlag);
 try {
   console.log('Lighthouse:');

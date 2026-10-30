@@ -40,7 +40,7 @@ The run creates `runs/<timestamp>/`, and the results end up in `runs/<timestamp>
 The Pokémon data (about 2 GB, from pinned commits of PokeAPI's repos) is downloaded **once**,
 when the `pokedex-base` image is first built. It sits in an image layer that later builds
 reuse, so no agent ever downloads it and it costs no tokens. Only `--no-cache`, or a
-change to `template/scripts/`, downloads it again.
+change to the scenario's `template/scripts/`, downloads it again.
 
 Read `bench/run.mjs` before you run it: it's the only thing that runs on your machine.
 Agents, and the apps they write, only ever run inside containers.
@@ -49,6 +49,7 @@ Agents, and the apps they write, only ever run inside containers.
 
 | Option | Default | |
 | --- | --- | --- |
+| `--scenario=NAME` | `pokedex` | The app agents build: a directory in `scenarios/`. With `--append-to`, `--measure-only` or `--report-only`, the run's own scenario is used |
 | `--frameworks=a,b` or `all` | (required) | Keys from `bench/frameworks.mjs`: `next`, `nuxt`, `tanstack-start`, `react-router`, `solidstart`, `sveltekit`, `angular`, `astro`, `qwik`, `gracile`, `hono-htmx`, `vanilla` |
 | `--iterations=N` | 1 | Agent runs per framework |
 | `--model=ID` | `claude-opus-5-5` | Passed to `claude --model` |
@@ -81,11 +82,11 @@ credential. Use a key with a spending limit.
 
 ## What happens in a run
 
-1. **Images.** `bench/container/export-template.sh` copies `template/` into a fresh git repo
+1. **Images.** `bench/container/export-template.sh` copies the scenario's `template/` into a fresh git repo
    with a single commit, so agents can't see this repo's history, the gold-standard app or the
    measurement code. Then three images are built:
    - **`pokedex-base`**: Ubuntu 24.04, Node 24, Playwright's Chromium, and the exported repo.
-     The Pokémon data is downloaded here, once, by `template/scripts/setup-data.sh`. It
+     The Pokémon data is downloaded here, once, by `scripts/setup-data.sh` in the template. It
      fetches pinned commits of PokeAPI's `api-data`, `sprites` (a subset) and `cries`, and
      rewrites media URLs to point at the local API server.
    - **`pokedex-agent`**: adds Claude Code and `agent-browser`, and sets `IS_SANDBOX=1`.
@@ -170,25 +171,25 @@ To summarize a single transcript: `node bench/tokens.mjs runs/<id>/<framework>-<
 
 | Path | |
 | --- | --- |
-| `template/` | Everything an agent sees: `SPEC.md`, `api/server.mjs` (local PokeAPI), `scripts/setup-data.sh`, `tests/`, `design/` |
-| `template/tests/` | Playwright acceptance tests that query roles, accessible names and text, not DOM structure. `run.mjs` builds the app against the normal API, then runs it against an API with changed data (`fixtures/live-data-overlay.json`) to catch apps that bake data in at build time |
-| `gold/` | Dependency-free reference implementation. It produced `template/design/screenshots/` and is used to check the tests (`APP_DIR=../gold npm test` in `template/`). Agents never see it |
+| `scenarios/<name>/template/` | Everything an agent sees: `SPEC.md`, `api/server.mjs` (local PokeAPI), `scripts/setup-data.sh`, `tests/`, `design/` |
+| `scenarios/<name>/template/tests/` | Playwright acceptance tests that query roles, accessible names and text, not DOM structure. `run.mjs` builds the app against the normal API, then runs it against an API with changed data (`fixtures/live-data-overlay.json`) to catch apps that bake data in at build time |
+| `scenarios/<name>/gold/` | Reference implementation. It produced `template/design/screenshots/` and is used to check the tests (`APP_DIR=../gold npm test` in `template/`). Agents never see it |
 | `bench/run.mjs` | The orchestrator |
 | `bench/container/` | Containerfiles, the export script, the agent entrypoint and the tooling setup |
 | `bench/measure.mjs`, `stack.mjs` | Measurement (run inside `pokedex-measure`) |
-| `bench/screenshots.mjs` | Captures the reference screenshots from `gold/` |
+| `bench/screenshots.mjs` | Captures the reference screenshots from a scenario's `gold/` |
 | `bench/report.mjs`, `tokens.mjs` | Report generation |
 | `docs/audits/` | Periodic code audits: findings, and what was decided on each and why. One file per audit, named by date |
 
 ### Working on the harness without Podman
 
 ```sh
-cd template && ./scripts/setup-data.sh && npm install && npx playwright install chromium
+cd scenarios/pokedex/template && ./scripts/setup-data.sh && npm install && npx playwright install chromium
 npm run api                          # local PokeAPI on :9000
 (cd ../gold && npm start)            # gold app on :3000
 APP_DIR=../gold npm test             # all tests should pass
-cd ../bench && npm install
-node measure.mjs ../gold /tmp/gold-results --runs 1 --skip-build   # needs Caddy installed
+cd ../../../bench && npm install
+node measure.mjs ../scenarios/pokedex/gold /tmp/gold-results --runs 1 --skip-build   # needs Caddy installed
 ```
 
 ## Design decisions and known limitations
@@ -207,7 +208,7 @@ node measure.mjs ../gold /tmp/gold-results --runs 1 --skip-build   # needs Caddy
 - **Styling is constrained**: shared design tokens, system fonts, no CSS frameworks or
   component libraries, no animations. This keeps visual and CSS differences from dominating
   the results.
-- **Pinned versus recorded.** Node is pinned by `.nvmrc` (a symlink to `template/.nvmrc`);
+- **Pinned versus recorded.** Node is pinned by each template's `.nvmrc` (the root `.nvmrc` links to the pokedex one);
   the containers install that exact version from nodejs.org, with checksum verification,
   and npm is the version bundled with it. Playwright and agent-browser are pinned in the
   Containerfiles; Claude Code, the model and the effort level by `run.mjs`'s defaults. Frameworks and
@@ -223,7 +224,7 @@ node measure.mjs ../gold /tmp/gold-results --runs 1 --skip-build   # needs Caddy
   - the image IDs and the Ubuntu base image digest (`config.json`)
 - **Some text checks don't read inside shadow roots.** The spec allows open shadow roots, and
   the tests' role, label and text locators find elements inside them. But `textOf` and
-  `expectText` in `template/tests/specs/helpers.mjs` read `innerText`, which leaves out the
+  `expectText` in `scenarios/pokedex/template/tests/specs/helpers.mjs` read `innerText`, which leaves out the
   contents of shadow roots below the element. An app that rendered, say, a move's Power or a
   Pokémon's Height inside a component's shadow root would fail those checks. No app so far
   has: Gracile's shadow-DOM components hold only the list and the moves table, which the
