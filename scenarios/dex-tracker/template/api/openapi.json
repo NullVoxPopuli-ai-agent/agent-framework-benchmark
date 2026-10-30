@@ -1,0 +1,2599 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Dex Tracker API",
+    "version": "1.0.0",
+    "description": "The backend for Dex Tracker, maintained by another team. It covers one trainer: their games, catches, friends, trades and shiny hunts, plus Pokémon reference data.\n\n- All responses are JSON, except images under `/media/`. Errors are `{ \"error\": \"...\" }` with status 400, 404 or 409.\n- Lists that page take `page` (1-based) and `pageSize`, and return `{ items, page, pageSize, total, totalPages }`. A page past the end returns no items.\n- Every `/api` response takes about 30 ms, like a real service. Responses are `Cache-Control: no-store`: the data changes, including through the POST endpoints.\n- Dates are `YYYY-MM-DD` strings. The data has its own current date (`today` in /api/me and /api/meta).\n- Image URLs in responses are absolute. Images can be cached.\n- CORS is open, so browsers can call the API directly."
+  },
+  "paths": {
+    "/api/me": {
+      "get": {
+        "summary": "The trainer and their totals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "friendCode",
+                    "since",
+                    "today",
+                    "stats"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "friendCode": {
+                      "type": "string"
+                    },
+                    "since": {
+                      "type": "string",
+                      "description": "When they started tracking",
+                      "format": "date",
+                      "example": "2026-10-15"
+                    },
+                    "today": {
+                      "type": "string",
+                      "description": "The data's current date. Dates never go past it.",
+                      "format": "date",
+                      "example": "2026-10-15"
+                    },
+                    "stats": {
+                      "type": "object",
+                      "required": [
+                        "speciesCaught",
+                        "speciesTotal",
+                        "catchCount",
+                        "shinyCount",
+                        "tradeCount",
+                        "hoursPlayed",
+                        "gamesOwned",
+                        "activeHunts"
+                      ],
+                      "properties": {
+                        "speciesCaught": {
+                          "type": "integer",
+                          "description": "Species with at least one catch"
+                        },
+                        "speciesTotal": {
+                          "type": "integer",
+                          "description": "Species that exist"
+                        },
+                        "catchCount": {
+                          "type": "integer"
+                        },
+                        "shinyCount": {
+                          "type": "integer"
+                        },
+                        "tradeCount": {
+                          "type": "integer"
+                        },
+                        "hoursPlayed": {
+                          "type": "integer",
+                          "description": "Across every game, rounded"
+                        },
+                        "gamesOwned": {
+                          "type": "integer"
+                        },
+                        "activeHunts": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "summary": "Lists for filters and forms",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "today",
+                    "generations",
+                    "types",
+                    "games",
+                    "catchMethods",
+                    "huntMethods"
+                  ],
+                  "properties": {
+                    "today": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-10-15"
+                    },
+                    "generations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GenerationRef"
+                      }
+                    },
+                    "types": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TypeRef"
+                      },
+                      "description": "The 18 types"
+                    },
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/GameRef"
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "generation",
+                              "platform"
+                            ],
+                            "properties": {
+                              "generation": {
+                                "$ref": "#/components/schemas/GenerationRef"
+                              },
+                              "platform": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "description": "Every game, owned or not, in release order"
+                    },
+                    "catchMethods": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "huntMethods": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/completion-by-game": {
+      "get": {
+        "summary": "Regional Pokédex completion for each owned game",
+        "description": "A species counts as caught in a game when it was caught in that game.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "game",
+                          "caught",
+                          "dexSize",
+                          "percent"
+                        ],
+                        "properties": {
+                          "game": {
+                            "$ref": "#/components/schemas/GameRef"
+                          },
+                          "caught": {
+                            "type": "integer"
+                          },
+                          "dexSize": {
+                            "type": "integer"
+                          },
+                          "percent": {
+                            "type": "number",
+                            "description": "caught / dexSize × 100, one decimal"
+                          }
+                        }
+                      },
+                      "description": "Owned games, in release order"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/catches-by-month": {
+      "get": {
+        "summary": "Catches per month for the last 24 months",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "month",
+                          "count"
+                        ],
+                        "properties": {
+                          "month": {
+                            "type": "string",
+                            "description": "`YYYY-MM`"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "description": "Oldest first, ending with the current month; months without catches have count 0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activity": {
+      "get": {
+        "summary": "Recent activity, newest first",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ActivityItem"
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/needs": {
+      "get": {
+        "summary": "Species the trainer has never caught, and how to get them",
+        "parameters": [
+          {
+            "name": "generation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Generation API name, such as `generation-i`"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "wild",
+                "friends",
+                "trade-evolution"
+              ],
+              "default": "all"
+            },
+            "description": "`wild`: catchable in an owned game. `friends`: a friend has one. `trade-evolution`: evolves by trade."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dex",
+                "friends"
+              ],
+              "default": "dex"
+            },
+            "description": "`dex`: by National Pokédex number. `friends`: most friends first, then by number."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "species",
+                          "generation",
+                          "wildIn",
+                          "friendCount",
+                          "tradeEvolution"
+                        ],
+                        "properties": {
+                          "species": {
+                            "$ref": "#/components/schemas/SpeciesRef"
+                          },
+                          "generation": {
+                            "$ref": "#/components/schemas/GenerationRef"
+                          },
+                          "wildIn": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/GameRef"
+                            },
+                            "description": "Owned games where it can be caught in the wild, in release order"
+                          },
+                          "friendCount": {
+                            "type": "integer",
+                            "description": "Friends who have one"
+                          },
+                          "tradeEvolution": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "from",
+                                  "how"
+                                ],
+                                "properties": {
+                                  "from": {
+                                    "$ref": "#/components/schemas/SpeciesRef"
+                                  },
+                                  "how": {
+                                    "type": "string",
+                                    "description": "such as `Trade holding Metal Coat`"
+                                  }
+                                },
+                                "description": "Set when it evolves from another species by trade"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/species": {
+      "get": {
+        "summary": "Search species by name",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case-insensitive substring of the English or API name"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/SpeciesRef"
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "caught"
+                            ],
+                            "properties": {
+                              "caught": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/species/{name}": {
+      "get": {
+        "summary": "One species, with the trainer's progress on it",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Species API name, such as `pikachu`"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "species",
+                    "mine",
+                    "evolution",
+                    "availability",
+                    "friends"
+                  ],
+                  "properties": {
+                    "species": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/SpeciesRef"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "genus",
+                            "generation",
+                            "artwork",
+                            "legendary",
+                            "mythical"
+                          ],
+                          "properties": {
+                            "genus": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "description": "such as `Mouse Pokémon`"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "generation": {
+                              "$ref": "#/components/schemas/GenerationRef"
+                            },
+                            "artwork": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "description": "Absolute URL of the official artwork, 475×475",
+                                  "format": "uri"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "legendary": {
+                              "type": "boolean"
+                            },
+                            "mythical": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "mine": {
+                      "type": "object",
+                      "required": [
+                        "caught",
+                        "shiny",
+                        "firstCaught",
+                        "lastCaught"
+                      ],
+                      "properties": {
+                        "caught": {
+                          "type": "integer",
+                          "description": "Number of catches"
+                        },
+                        "shiny": {
+                          "type": "integer",
+                          "description": "Number of shiny catches"
+                        },
+                        "firstCaught": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "example": "2026-10-15"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastCaught": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "example": "2026-10-15"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "evolution": {
+                      "$ref": "#/components/schemas/EvolutionNode"
+                    },
+                    "availability": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "game",
+                          "wild",
+                          "owned"
+                        ],
+                        "properties": {
+                          "game": {
+                            "$ref": "#/components/schemas/GameRef"
+                          },
+                          "wild": {
+                            "type": "boolean",
+                            "description": "Catchable in the wild (per the encounter data, which is missing for some newer games)"
+                          },
+                          "owned": {
+                            "type": "boolean"
+                          }
+                        }
+                      },
+                      "description": "Games whose regional Pokédex includes it, in release order"
+                    },
+                    "friends": {
+                      "type": "object",
+                      "required": [
+                        "total",
+                        "items"
+                      ],
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "description": "Friends who have one"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/FriendRef"
+                          },
+                          "description": "The first 12 by name"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/species/{name}/catches": {
+      "get": {
+        "summary": "Catches of one species, newest first",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Catch"
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catches": {
+      "get": {
+        "summary": "Every catch, filtered and sorted",
+        "parameters": [
+          {
+            "name": "game",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Game id, such as `scarlet`"
+          },
+          {
+            "name": "species",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Species API name"
+          },
+          {
+            "name": "shiny",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "One of `catchMethods` from /api/meta"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "-date",
+                "date",
+                "-level",
+                "level",
+                "dex"
+              ],
+              "default": "-date"
+            },
+            "description": "A leading `-` means descending. Ties are broken newest first."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Catch"
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games": {
+      "get": {
+        "summary": "Owned games, in release order",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "game",
+                          "generation",
+                          "platform",
+                          "copies",
+                          "playthroughs",
+                          "hours",
+                          "startedAt",
+                          "lastPlayed",
+                          "dexSize",
+                          "dexCaught"
+                        ],
+                        "properties": {
+                          "game": {
+                            "$ref": "#/components/schemas/GameRef"
+                          },
+                          "generation": {
+                            "$ref": "#/components/schemas/GenerationRef"
+                          },
+                          "platform": {
+                            "type": "string"
+                          },
+                          "copies": {
+                            "type": "integer",
+                            "description": "Cartridges or copies owned"
+                          },
+                          "playthroughs": {
+                            "type": "integer"
+                          },
+                          "hours": {
+                            "type": "integer"
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-10-15"
+                          },
+                          "lastPlayed": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-10-15"
+                          },
+                          "dexSize": {
+                            "type": "integer",
+                            "description": "Species in its regional Pokédex"
+                          },
+                          "dexCaught": {
+                            "type": "integer",
+                            "description": "Of those, species caught in this game"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{id}": {
+      "get": {
+        "summary": "One game (owned or not)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Game id, such as `red`"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "game",
+                    "counterpart",
+                    "dexSize",
+                    "mine",
+                    "hoursByMonth",
+                    "counterpartExclusives"
+                  ],
+                  "properties": {
+                    "game": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/GameRef"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "generation",
+                            "platform"
+                          ],
+                          "properties": {
+                            "generation": {
+                              "$ref": "#/components/schemas/GenerationRef"
+                            },
+                            "platform": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "counterpart": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/GameRef"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dexSize": {
+                      "type": "integer"
+                    },
+                    "mine": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "copies",
+                            "playthroughs",
+                            "startedAt",
+                            "lastPlayed",
+                            "hours",
+                            "dexCaught",
+                            "catchCount",
+                            "shinyCount"
+                          ],
+                          "properties": {
+                            "copies": {
+                              "type": "integer"
+                            },
+                            "playthroughs": {
+                              "type": "integer"
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "format": "date",
+                              "example": "2026-10-15"
+                            },
+                            "lastPlayed": {
+                              "type": "string",
+                              "format": "date",
+                              "example": "2026-10-15"
+                            },
+                            "hours": {
+                              "type": "integer"
+                            },
+                            "dexCaught": {
+                              "type": "integer"
+                            },
+                            "catchCount": {
+                              "type": "integer"
+                            },
+                            "shinyCount": {
+                              "type": "integer"
+                            }
+                          },
+                          "description": "null when the game isn't owned"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hoursByMonth": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "month",
+                          "hours"
+                        ],
+                        "properties": {
+                          "month": {
+                            "type": "string",
+                            "description": "`YYYY-MM`"
+                          },
+                          "hours": {
+                            "type": "number",
+                            "description": "One decimal"
+                          }
+                        }
+                      },
+                      "description": "The last 12 months, oldest first"
+                    },
+                    "counterpartExclusives": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "species",
+                          "caught"
+                        ],
+                        "properties": {
+                          "species": {
+                            "$ref": "#/components/schemas/SpeciesRef"
+                          },
+                          "caught": {
+                            "type": "boolean",
+                            "description": "Caught in any game"
+                          }
+                        }
+                      },
+                      "description": "Species found in the wild in the counterpart version but not in this one, by Pokédex number. Empty without a counterpart."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{id}/dex": {
+      "get": {
+        "summary": "A game's regional Pokédex, with what was caught in that game",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "caught",
+                "missing"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "number",
+                          "species",
+                          "caught"
+                        ],
+                        "properties": {
+                          "number": {
+                            "type": "integer",
+                            "description": "Regional Pokédex number"
+                          },
+                          "species": {
+                            "$ref": "#/components/schemas/SpeciesRef"
+                          },
+                          "caught": {
+                            "type": "boolean",
+                            "description": "Caught in this game"
+                          }
+                        }
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends": {
+      "get": {
+        "summary": "Friends",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "trades",
+                "can-help",
+                "last-trade"
+              ],
+              "default": "name"
+            },
+            "description": "`trades`, `can-help` and `last-trade` sort descending; ties by name"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "friend",
+                          "friendCode",
+                          "since",
+                          "gameCount",
+                          "tradeCount",
+                          "lastTradeAt",
+                          "canHelp"
+                        ],
+                        "properties": {
+                          "friend": {
+                            "$ref": "#/components/schemas/FriendRef"
+                          },
+                          "friendCode": {
+                            "type": "string"
+                          },
+                          "since": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-10-15"
+                          },
+                          "gameCount": {
+                            "type": "integer"
+                          },
+                          "tradeCount": {
+                            "type": "integer"
+                          },
+                          "lastTradeAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "example": "2026-10-15"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "canHelp": {
+                            "type": "integer",
+                            "description": "Species the trainer needs that this friend has"
+                          }
+                        }
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/{id}": {
+      "get": {
+        "summary": "One friend",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "friend",
+                    "friendCode",
+                    "since",
+                    "games",
+                    "tradeCount",
+                    "firstTradeAt",
+                    "lastTradeAt",
+                    "canHelp",
+                    "tradesByYear"
+                  ],
+                  "properties": {
+                    "friend": {
+                      "$ref": "#/components/schemas/FriendRef"
+                    },
+                    "friendCode": {
+                      "type": "string"
+                    },
+                    "since": {
+                      "type": "string",
+                      "format": "date",
+                      "example": "2026-10-15"
+                    },
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GameRef"
+                      },
+                      "description": "Games they own, in release order"
+                    },
+                    "tradeCount": {
+                      "type": "integer"
+                    },
+                    "firstTradeAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "example": "2026-10-15"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastTradeAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "example": "2026-10-15"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "canHelp": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SpeciesRef"
+                      },
+                      "description": "Species the trainer needs that this friend has, by Pokédex number"
+                    },
+                    "tradesByYear": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "year",
+                          "count"
+                        ],
+                        "properties": {
+                          "year": {
+                            "type": "string",
+                            "description": "`YYYY`"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "description": "From the year of the first trade (or of `since`) to the current year"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trades": {
+      "get": {
+        "summary": "Trades",
+        "parameters": [
+          {
+            "name": "friend",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Friend id"
+          },
+          {
+            "name": "game",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Game id, such as `scarlet`"
+          },
+          {
+            "name": "evolved",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Only trade evolutions (or only others)"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "-date",
+                "date"
+              ],
+              "default": "-date"
+            },
+            "description": "Ties are broken by id, the same way"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Trade"
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Log a trade",
+        "description": "Creates the trade and a catch (method `Trade`) of what you received. Trades logged this way never evolve.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "friendId",
+                  "game",
+                  "gave",
+                  "received"
+                ],
+                "properties": {
+                  "friendId": {
+                    "type": "integer"
+                  },
+                  "game": {
+                    "type": "string",
+                    "description": "Id of a game you own"
+                  },
+                  "gave": {
+                    "type": "string",
+                    "description": "Species API name"
+                  },
+                  "received": {
+                    "type": "string",
+                    "description": "Species API name"
+                  },
+                  "tradedAt": {
+                    "type": "string",
+                    "description": "Defaults to today; can't be later",
+                    "format": "date",
+                    "example": "2026-10-15"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trades/{id}": {
+      "get": {
+        "summary": "One trade",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Trade"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "evolvedFrom",
+                        "evolutionMethod"
+                      ],
+                      "properties": {
+                        "evolvedFrom": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/components/schemas/SpeciesRef"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "evolutionMethod": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "such as `Trade holding Metal Coat`"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hunts": {
+      "get": {
+        "summary": "Shiny hunts",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "completed",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "-started",
+                "encounters"
+              ],
+              "default": "-started"
+            },
+            "description": "`encounters`: most first"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Hunt"
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "description": "The page returned, 1-based"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Number of matching items across all pages"
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "description": "At least 1, even when total is 0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hunts/{id}": {
+      "get": {
+        "summary": "One shiny hunt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hunt"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hunts/{id}/encounters": {
+      "post": {
+        "summary": "Add encounters to an active hunt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "description": "Default 1",
+                    "minimum": 1,
+                    "maximum": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated hunt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hunt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "TypeRef": {
+        "type": "object",
+        "required": [
+          "name",
+          "displayName"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "API name, such as `fire`"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "English name, such as `Fire`"
+          }
+        }
+      },
+      "GenerationRef": {
+        "type": "object",
+        "required": [
+          "name",
+          "displayName"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "such as `generation-i`"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "such as `Generation I`"
+          }
+        }
+      },
+      "GameRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "API name of the game, such as `scarlet`"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "English name, such as `Scarlet`"
+          }
+        }
+      },
+      "FriendRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "SpeciesRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "displayName",
+          "sprite",
+          "types"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "National Pokédex number"
+          },
+          "name": {
+            "type": "string",
+            "description": "API name, such as `mr-mime`"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "English name, such as `Mr. Mime`"
+          },
+          "sprite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Absolute URL of the 96×96 front sprite",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TypeRef"
+            },
+            "description": "In slot order"
+          }
+        }
+      },
+      "Catch": {
+        "type": "object",
+        "required": [
+          "id",
+          "species",
+          "game",
+          "caughtAt",
+          "level",
+          "shiny",
+          "method",
+          "ball",
+          "nickname",
+          "tradeId",
+          "huntId"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "species": {
+            "$ref": "#/components/schemas/SpeciesRef"
+          },
+          "game": {
+            "$ref": "#/components/schemas/GameRef"
+          },
+          "caughtAt": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-15"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "shiny": {
+            "type": "boolean"
+          },
+          "method": {
+            "type": "string",
+            "description": "How it was obtained: `Wild`, `Egg`, `Gift`, `Raid` or `Trade`"
+          },
+          "ball": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "The ball it was caught in; null for trades"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tradeId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "description": "The trade it came from, for method `Trade`"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "huntId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "description": "The shiny hunt it came from"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Trade": {
+        "type": "object",
+        "required": [
+          "id",
+          "tradedAt",
+          "friend",
+          "game",
+          "gave",
+          "received",
+          "evolved"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tradedAt": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-15"
+          },
+          "friend": {
+            "$ref": "#/components/schemas/FriendRef"
+          },
+          "game": {
+            "$ref": "#/components/schemas/GameRef"
+          },
+          "gave": {
+            "$ref": "#/components/schemas/SpeciesRef"
+          },
+          "received": {
+            "$ref": "#/components/schemas/SpeciesRef"
+          },
+          "evolved": {
+            "type": "boolean",
+            "description": "Whether what you received evolved on arrival (a trade evolution); `received` is the evolved species"
+          }
+        }
+      },
+      "Hunt": {
+        "type": "object",
+        "required": [
+          "id",
+          "species",
+          "game",
+          "method",
+          "startedAt",
+          "endedAt",
+          "status",
+          "encounters"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "species": {
+            "$ref": "#/components/schemas/SpeciesRef"
+          },
+          "game": {
+            "$ref": "#/components/schemas/GameRef"
+          },
+          "method": {
+            "type": "string",
+            "description": "such as `Masuda method`"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-15"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "null while active",
+                "format": "date",
+                "example": "2026-10-15"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "failed"
+            ]
+          },
+          "encounters": {
+            "type": "integer",
+            "description": "Encounters (or eggs, or resets) so far"
+          }
+        }
+      },
+      "EvolutionNode": {
+        "type": "object",
+        "required": [
+          "species",
+          "how",
+          "trade",
+          "evolvesTo"
+        ],
+        "properties": {
+          "species": {
+            "$ref": "#/components/schemas/SpeciesRef"
+          },
+          "how": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "How the previous stage evolves into this one, such as `Level 16` or `Trade holding Metal Coat`; null for the first stage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trade": {
+            "type": "boolean",
+            "description": "Whether this evolution needs a trade"
+          },
+          "evolvesTo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvolutionNode"
+            },
+            "description": "Next stages; several for branching families such as Eevee"
+          }
+        }
+      },
+      "ActivityItem": {
+        "description": "A trade, a completed shiny hunt (`type: hunt`), or a catch that didn't come from a trade or hunt. Has the fields of the Trade, Hunt or Catch it describes, plus `type` and `date`.",
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Trade"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "date"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "trade"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-10-15"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Hunt"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "date"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "hunt"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "When the hunt ended",
+                    "format": "date",
+                    "example": "2026-10-15"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Catch"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "date"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "catch"
+                    ]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-10-15"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
