@@ -219,6 +219,7 @@ To summarize a single transcript: `node bench/tokens.mjs runs/<id>/<framework>-<
 | `scenarios/<name>/template/` | Everything an agent sees: `SPEC.md`, `api/server.mjs` (local PokeAPI), `scripts/setup-data.sh`, `tests/`, `design/` |
 | `scenarios/<name>/template/tests/` | Playwright acceptance tests that query roles, accessible names and text, not DOM structure. `run.mjs` builds the app against the normal API, then runs it against an API with changed data (`fixtures/live-data-overlay.json`) to catch apps that bake data in at build time |
 | `scenarios/<name>/gold/` | Reference implementation. It produced `template/design/screenshots/` and is used to check the tests (`APP_DIR=../gold npm test` in `template/`). Agents never see it |
+| `scenarios/dex-tracker/api-tests/` | Checks that the dex-tracker API works and matches `api/openapi.json` (`node --test scenarios/dex-tracker/api-tests/`), and the script that writes `openapi.json`. Not part of a run; agents never see them |
 | `bench/run.mjs` | The orchestrator |
 | `bench/container/` | Containerfiles, the export script, the agent entrypoint and the tooling setup |
 | `bench/measure.mjs`, `stack.mjs` | Measurement (run inside `pokedex-measure`) |
