@@ -576,16 +576,20 @@ ${filters(self, [
     ],
   }),
 ])}
-${table({
-  caption: 'Regional Pokédex',
-  columns: [
-    ['No.', (i) => i.number, 'num-col muted'],
-    ['Pokémon', (i) => pokemonCell(i.species)],
-    ['Caught', (i) => yesNo(i.caught)],
-  ],
-  rows: dex.items,
-})}
-${pagination(dex, (n) => hrefWith(self, { status, page: n }, { status: 'all', page: 1 }))}`,
+${
+  dex.total
+    ? html`${table({
+        caption: 'Regional Pokédex',
+        columns: [
+          ['No.', (i) => i.number, 'num-col muted'],
+          ['Pokémon', (i) => pokemonCell(i.species)],
+          ['Caught', (i) => yesNo(i.caught)],
+        ],
+        rows: dex.items,
+      })}
+${pagination(dex, (n) => hrefWith(self, { status, page: n }, { status: 'all', page: 1 }))}`
+    : html`<p class="empty">Nothing to show</p>`
+}`,
 )}
 ${
   g.counterpart

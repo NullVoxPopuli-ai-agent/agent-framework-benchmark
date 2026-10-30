@@ -228,7 +228,8 @@ images.** They're simple on purpose:
   - A `<select>` labelled `Show`: `All` (`all`), `Caught` (`caught`), `Missing`
     (`missing`), stored in the URL as `status`.
   - Data table `Regional Pokédex`, 50 per page with pagination. Columns: `No.` (the
-    regional number), `Pokémon`, `Caught` (in this game).
+    regional number), `Pokémon`, `Caught` (in this game). With no rows, the text
+    `Nothing to show` instead.
 - If the game has a counterpart: section `Version exclusives` with the text
   `Found in the wild in <counterpart> but not in <game>`, then a list with one item per
   species: a Pokémon link followed by `(caught)` or `(needed)`. If there are none, the

@@ -81,6 +81,9 @@ test.describe('Games', () => {
     await expect(phrase(main(page), "You don't own this game.")).toBeVisible();
     await expect(section(page, 'Hours per month')).toHaveCount(0);
     await expect(phrase(section(page, 'Pokédex'), `0 of ${num(g.dexSize)} caught`)).toBeVisible();
+    await page.goto(`/games/${id}?status=caught`);
+    await expect(phrase(section(page, 'Pokédex'), 'Nothing to show')).toBeVisible();
+    await expect(table(section(page, 'Pokédex'), 'Regional Pokédex')).toHaveCount(0);
   });
 });
 
