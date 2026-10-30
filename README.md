@@ -12,10 +12,23 @@
 How many tokens, and how much time, does a coding agent need to build the same
 non-trivial web app in different frameworks? And how fast is the app it builds?
 
-Each agent gets the same spec (a Pokédex backed by a local copy of PokeAPI), the same
-tests, the same tools and the same one-line prompt. The only difference is the framework
-it's told to use. Each agent runs alone in a fresh Podman container. Afterwards, the
-app it built is measured in another container with Lighthouse.
+Each agent gets the same spec, the same tests, the same tools and the same one-line
+prompt. The only difference is the framework it's told to use. Each agent runs alone in a
+fresh Podman container. Afterwards, the app it built is measured in another container.
+
+## Scenarios
+
+The app the agents build is a *scenario*, chosen with `--scenario` (each is a directory in
+`scenarios/`):
+
+| Scenario | The app | Measured |
+| --- | --- | --- |
+| `pokedex` (default) | A content-heavy Pokédex backed by a local copy of PokeAPI: 6 page types, lists, filters, sortable tables. The first report used this | Lighthouse cold loads of 6 URLs, simulated throttling |
+| `dex-tracker` | A dashboard for a Pokémon completionist, on a ready-made REST API: 14 page types, paged and filtered data tables, hand-drawn SVG charts, forms that write, 72k catches and 9.8k trades of data. Built to be the kind of app SPA frameworks are made for | A session: a cold load, then clicks in the same tab, each measured with Chrome's own LCP (soft navigations included). Plus Lighthouse cold loads of 4 URLs. DevTools throttling |
+
+```sh
+node bench/run.mjs --scenario=dex-tracker --frameworks=next,astro --iterations=1
+```
 
 ## Quick start
 
@@ -115,6 +128,38 @@ credential. Use a key with a spending limit.
    are the home page's (every URL is in each iteration's `measure/results.json`). With several
    iterations, each framework's numbers are medians across them.
 
+### Measuring the dex-tracker scenario
+
+The question this scenario asks is whether single-page apps make the *next* page faster,
+which page-load benchmarks can't see. The headline numbers are two LCPs from one session:
+
+1. **Cold load**: `/` in a fresh browser profile, so nothing is cached.
+2. **First click**: the `Needs` link in the navigation, in the same tab, so the app's
+   scripts and styles are cached. LCP is measured from the click.
+
+Both come from Chrome itself, through [web-vitals](https://github.com/GoogleChrome/web-vitals)
+with `reportSoftNavs`. Chrome 151 and later detect [soft navigations](https://developer.chrome.com/docs/web-platform/soft-navigations)
+(a click that changes the URL and paints new content) and report LCP for them from the
+interaction, as CrUX now does. A click that loads a new document gets that document's LCP,
+plus the time from the click to its time origin (usually a few milliseconds), so both kinds
+of navigation are measured from the click. The tests require every link to be one or the
+other, so no app can end up with no number. The session continues with three more clicks
+(a Pokémon, `Trades`, `Next page`), recorded in `results.json` but not in the headline.
+
+Throttling and emulation are Lighthouse's mobile defaults (562.5 ms request latency,
+1.4 Mbps, 4× CPU slowdown, Moto G Power screen), applied through the DevTools protocol the
+way Lighthouse's `devtools` throttling does. Lighthouse's default simulated throttling
+can't be used: it estimates a single page load from a trace and can't model a click. The
+cold loads Lighthouse measures for this scenario use `throttlingMethod: 'devtools'` too, so
+all numbers share one throttling method.
+
+This breaks comparability with the pokedex results, which used simulated throttling.
+DevTools throttling adds latency per request rather than per packet, so it gets connection
+setup and HTTP/2 multiplexing only roughly right; it does so the same way for every app.
+
+The API adds 30 ms to every request, for the browser and the app server alike, so server
+rendering doesn't get its data for free.
+
 ### The prompt
 
 The same for every agent, apart from the framework label in `bench/frameworks.mjs`:
@@ -197,14 +242,21 @@ node measure.mjs ../scenarios/pokedex/gold /tmp/gold-results --runs 1 --skip-bui
 - **The data is live.** Apps must fetch from the API at request time; build-time fetching and
   static generation of data pages aren't allowed, and the tests check this. Otherwise one
   architecture (prerender everything) would win by sidestepping the API.
-- **No artificial latency** on the API. The browser's API requests are slowed by Lighthouse's
-  throttling, but an MPA server's calls to the API run at localhost speed, like an app server
-  sitting next to its API. Keep this in mind when comparing SPAs with MPAs.
-- **The site is content-heavy**, which favors server-rendered MPAs on first-load metrics.
-- **Only page loads are measured.** Interactions after the page loads (search, sorting,
+- **API latency.** pokedex's API has none: the browser's API requests are slowed by
+  Lighthouse's throttling, but an MPA server's calls to the API run at localhost speed, like
+  an app server sitting next to its API. dex-tracker's API adds 30 ms to every request, from
+  the browser or the server. The browser's requests are throttled on top of that, which
+  still favors fetching on the server; that's how such apps are usually deployed.
+- **The pokedex site is content-heavy**, which favors server-rendered MPAs on first-load
+  metrics. dex-tracker is a dashboard with forms and writes, closer to what SPAs are for.
+- **pokedex measures page loads only.** Interactions after the page loads (search, sorting,
   client-side navigation), where SPAs can win back ground, aren't. An earlier version timed a
   scripted flow, but the timings mostly reflected debounce settings, round trips and harness
-  overhead (see `docs/audits/2026-10-25.md`).
+  overhead (see `docs/audits/2026-10-25.md`). dex-tracker measures clicks, with Chrome's
+  metrics instead of our own timings, and no typing.
+- **dex-tracker's charts are hand-drawn.** The spec forbids charting libraries, so the
+  benchmark measures the framework rather than the library an agent happened to pick. Real
+  dashboards usually use a library; this is a trade-off for comparability.
 - **Styling is constrained**: shared design tokens, system fonts, no CSS frameworks or
   component libraries, no animations. This keeps visual and CSS differences from dominating
   the results.

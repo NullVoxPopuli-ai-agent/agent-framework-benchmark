@@ -14,7 +14,7 @@ USER agent
 WORKDIR /home/agent/bench
 COPY --chown=agent:agent package.json package-lock.json /home/agent/bench/
 RUN npm ci --no-audit --no-fund
-COPY --chown=agent:agent stack.mjs measure.mjs /home/agent/bench/
+COPY --chown=agent:agent stack.mjs measure.mjs flow.mjs /home/agent/bench/
 
 ENV TEMPLATE_DIR=/home/agent/work
 ENTRYPOINT ["node", "/home/agent/bench/measure.mjs"]

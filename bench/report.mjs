@@ -70,8 +70,20 @@ function metrics(it) {
     jsKiB: lh('scriptBytes'),
     a11y: lh('accessibility'),
     loc: m?.code.sourceLines ?? null,
+    // The flow (dex-tracker): the cold load and the first click after it.
+    flowLoadLcp: m?.flow?.steps[0]?.lcp ?? null,
+    flowNavLcp: m?.flow?.steps[1]?.lcp ?? null,
+    flowNavType: m?.flow?.steps[1]?.type ?? null,
+    flowNavBytes: m?.flow?.steps[1]?.bytes ?? null,
   };
 }
+
+const FLOW_COLUMNS = [
+  ['Cold load LCP (ms)', (r) => fmt(r.flowLoadLcp)],
+  ['First click LCP (ms)', (r) => fmt(r.flowNavLcp)],
+  ['First click', (r) => r.flowNavType ?? '—'],
+  ['First click transfer (KiB)', (r) => fmt(r.flowNavBytes, 0, 1 / 1024)],
+];
 
 const COLUMNS = [
   ['Tests', (r) => `${r.passed}/${r.n}`],
@@ -130,6 +142,7 @@ export function writeReport(runDir) {
     const ms = its.map(metrics);
     const row = { framework: fw, n: its.length, passed: ms.filter((m) => m.testsPassed).length };
     for (const key of Object.keys(ms[0])) if (key !== 'testsPassed') row[key] = median(ms.map((m) => m[key]));
+    row.flowNavType = [...new Set(ms.map((m) => m.flowNavType).filter(Boolean))].join('/') || null;
     return row;
   });
   rows.sort((a, b) => (a.tokens ?? Infinity) - (b.tokens ?? Infinity));
@@ -145,12 +158,25 @@ export function writeReport(runDir) {
     .map((it) => `| ${it.dir} | ${it.info.claude_code ?? '—'} | ${it.info.model ?? '—'}${it.info.effort ? ` (${it.info.effort})` : ''} | ${it.info.node ?? '—'} | ${it.info.final_test_exit === '0' ? 'pass' : 'FAIL'} | ${it.errors.join('; ') || '—'} |`)
     .join('\n');
 
-  const md = `# Pokédex framework benchmark
+  const flowSection = rows.some((r) => r.flowNavType)
+    ? `## Session (web-vitals, mobile, DevTools throttling)
+
+A cold load of \`/\`, then a click on the \`Needs\` link in the same tab. LCP is Chrome's: for a
+soft navigation it's measured from the click; for a new document, from the click to its time
+origin plus its LCP. The first click is \`soft\` (Chrome detected a soft navigation), \`hard\`
+(a new document) or \`none\` (neither, so no LCP). Medians of ${config.lighthouseRuns ?? '?'} sessions. Each
+iteration's measure/results.json has every step.
+
+${table(FLOW_COLUMNS)}
+
+`
+    : '';
+  const md = `# ${config.scenario === 'dex-tracker' ? 'Dex Tracker' : 'Pokédex'} framework benchmark
 
 Run \`${path.basename(runDir)}\`, started ${config.startedAt ?? '—'}.
 ${config.iterations ?? '?'} iteration(s) per framework; numbers are medians across iterations.
 Lighthouse values are for the home page (\`/\`): the median of ${config.lighthouseRuns ?? '?'} runs, taken per metric, so LCP
-and TBT can come from different runs. Each iteration's measure/results.json has all 6 URLs.
+and TBT can come from different runs. Each iteration's measure/results.json has every URL.
 Sorted by total tokens.
 
 ## Building the app (agent)
@@ -159,7 +185,7 @@ Total tokens = cache reads + uncached input (input and cache writes) + output.
 
 ${table(COLUMNS.slice(0, 8))}
 
-## Page loads (Lighthouse, mobile settings)
+${flowSection}## Page loads (Lighthouse, mobile settings${config.scenario === 'dex-tracker' ? ', DevTools throttling' : ''})
 
 ${table(COLUMNS.slice(8, 15))}
 

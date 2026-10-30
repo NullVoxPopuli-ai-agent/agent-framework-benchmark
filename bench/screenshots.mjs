@@ -1,31 +1,50 @@
 // Captures screenshots of an app's key pages at mobile and desktop widths.
-// CLI: node bench/screenshots.mjs <baseURL> <outDir>
+// CLI: node bench/screenshots.mjs <baseURL> <outDir> [scenario, default pokedex]
 
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+// The pages each scenario's SPEC.md lists under "Look and feel".
 export const PAGES = {
-  home: '/',
-  'home-filtered': '/?type=fire&generation=generation-i',
-  pokemon: '/pokemon/pikachu',
-  'pokemon-moves': '/pokemon/pikachu?game=scarlet-violet#moves',
-  move: '/moves/thunderbolt',
-  ability: '/abilities/static',
-  types: '/types',
-  type: '/types/fire',
-  'not-found': '/pokemon/missingno',
+  pokedex: {
+    home: '/',
+    'home-filtered': '/?type=fire&generation=generation-i',
+    pokemon: '/pokemon/pikachu',
+    'pokemon-moves': '/pokemon/pikachu?game=scarlet-violet#moves',
+    move: '/moves/thunderbolt',
+    ability: '/abilities/static',
+    types: '/types',
+    type: '/types/fire',
+    'not-found': '/pokemon/missingno',
+  },
+  'dex-tracker': {
+    overview: '/',
+    needs: '/needs',
+    catches: '/catches?shiny=true',
+    games: '/games',
+    game: '/games/red',
+    friends: '/friends?sort=trades',
+    friend: '/friends/1',
+    trades: '/trades',
+    trade: '/trades/1',
+    'trade-new': '/trades/new',
+    hunts: '/hunts',
+    hunt: '/hunts/1',
+    pokemon: '/pokemon/slowpoke',
+    'not-found': '/pokemon/missingno',
+  },
 };
 export const VIEWPORTS = { mobile: { width: 412, height: 915 }, desktop: { width: 1280, height: 800 } };
 const MAX_HEIGHT = 4000;
 
-export async function capture(base, out) {
+export async function capture(base, out, scenario = 'pokedex') {
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch();
   try {
     for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
       const page = await browser.newPage({ viewport, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
-      for (const [name, path] of Object.entries(PAGES)) {
+      for (const [name, path] of Object.entries(PAGES[scenario])) {
         await page.goto(base + path, { waitUntil: 'networkidle' });
         // Let client-rendered pages and lazy images settle.
         await page.evaluate(() => document.fonts.ready);
@@ -57,7 +76,7 @@ export async function capture(base, out) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [base = 'http://localhost:3000', out = 'screenshots'] = process.argv.slice(2);
-  await capture(base, out);
+  const [base = 'http://localhost:3000', out = 'screenshots', scenario] = process.argv.slice(2);
+  await capture(base, out, scenario);
   console.log(`Saved screenshots to ${out}`);
 }

@@ -11,6 +11,7 @@ import * as chromeLauncher from 'chrome-launcher';
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { startStack, APP_ORIGIN, APP_PORT } from './stack.mjs';
+import { runFlow, THROTTLING, WEB_VITALS_VERSION } from './flow.mjs';
 
 const args = process.argv.slice(2);
 const valueOf = (flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
@@ -30,14 +31,48 @@ fs.mkdirSync(path.join(out, 'lighthouse'), { recursive: true });
 const CHROME = chromium.executablePath();
 // Completed with the flag that makes Chrome trust Caddy's certificates once the stack is up.
 const CHROME_FLAGS = ['--headless=new', '--no-sandbox', '--disable-gpu'];
-const LH_URLS = {
-  home: '/',
-  'home-filtered': '/?type=fire&generation=generation-i',
-  pokemon: '/pokemon/pikachu',
-  move: '/moves/thunderbolt',
-  ability: '/abilities/static',
-  type: '/types/fire',
+
+// What each scenario measures.
+// - lighthouse: cold loads, one Lighthouse run per URL and repetition. pokedex uses
+//   Lighthouse's default simulated throttling; dex-tracker uses its "devtools" throttling,
+//   the same as the flow, because a flow can't be simulated.
+// - flow: a session of clicks measured with web-vitals (see flow.mjs). The first click
+//   after the cold load is the headline navigation.
+// - apiEnv: the API's environment. pokedex's API has no latency; dex-tracker's has its
+//   default 30 ms per request.
+const nav = (name) => (page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
+const SCENARIOS = {
+  pokedex: {
+    lighthouse: {
+      urls: {
+        home: '/',
+        'home-filtered': '/?type=fire&generation=generation-i',
+        pokemon: '/pokemon/pikachu',
+        move: '/moves/thunderbolt',
+        ability: '/abilities/static',
+        type: '/types/fire',
+      },
+      throttlingMethod: 'simulate',
+    },
+    apiEnv: { LATENCY_MS: '0' },
+  },
+  'dex-tracker': {
+    lighthouse: {
+      urls: { home: '/', needs: '/needs', pokemon: '/pokemon/slowpoke', friend: '/friends/1' },
+      throttlingMethod: 'devtools',
+    },
+    apiEnv: {},
+    flow: [
+      { name: 'home', goto: '/' },
+      { name: 'needs', click: nav('Needs'), url: /\/needs$/ },
+      { name: 'pokemon', click: (page) => page.getByRole('table', { name: 'Needed species' }).getByRole('row').nth(1).getByRole('link').first(), url: /\/pokemon\/[^/?]+$/ },
+      { name: 'trades', click: nav('Trades'), url: /\/trades$/ },
+      { name: 'trades-page-2', click: (page) => page.getByRole('main').getByRole('link', { name: 'Next page', exact: true }), url: /\/trades\?page=2$/ },
+    ],
+  },
 };
+const SETUP = SCENARIOS[SCENARIO];
+if (!SETUP) throw new Error(`No measurement setup for scenario ${SCENARIO}`);
 const AUDITS = {
   lcp: 'largest-contentful-paint',
   fcp: 'first-contentful-paint',
@@ -72,16 +107,22 @@ function summarizeLhr(lhr) {
   };
 }
 
+// Warm the app's server-side caches right before every run, so even caches that expire
+// after 30 s are warm: the measured visit is a new user on a site other people already use.
+async function warm(...urlPaths) {
+  for (const urlPath of urlPaths) {
+    for (let j = 0; j < 2; j++) await fetch(`http://localhost:${APP_PORT}${urlPath}`).then((r) => r.arrayBuffer()).catch(() => {});
+  }
+}
+
 async function runLighthouse() {
   const results = {};
-  // Lighthouse's default (mobile) settings only. The desktop preset mostly measured the layout
-  // shift caused by Linux scrollbars appearing, which macOS users never see.
-  for (const [page, urlPath] of Object.entries(LH_URLS)) {
+  // Lighthouse's mobile settings only. The desktop preset mostly measured the layout shift
+  // caused by Linux scrollbars appearing, which macOS users never see.
+  for (const [page, urlPath] of Object.entries(SETUP.lighthouse.urls)) {
     const runs = [];
     for (let i = 0; i < RUNS; i++) {
-      // Warm the app's server-side caches right before every run, so even caches that expire
-      // after 30 s are warm: the measured visit is a new user on a site other people already use.
-      for (let j = 0; j < 2; j++) await fetch(`http://localhost:${APP_PORT}${urlPath}`).then((r) => r.arrayBuffer()).catch(() => {});
+      await warm(urlPath);
       const chrome = await chromeLauncher.launch({ chromePath: CHROME, chromeFlags: CHROME_FLAGS });
       try {
         const { lhr } = await lighthouse(APP_ORIGIN + urlPath, {
@@ -89,6 +130,7 @@ async function runLighthouse() {
           output: 'json',
           logLevel: 'error',
           onlyCategories: ['performance', 'accessibility'],
+          throttlingMethod: SETUP.lighthouse.throttlingMethod,
         });
         if (lhr.runtimeError) throw new Error(`${urlPath}: ${lhr.runtimeError.message}`);
         runs.push(summarizeLhr(lhr));
@@ -102,6 +144,24 @@ async function runLighthouse() {
     console.log(`  ${page.padEnd(14)} perf ${summary.performance}  LCP ${round(summary.lcp)}ms  TBT ${round(summary.tbt)}ms  CLS ${summary.cls}  JS ${round(summary.scriptBytes / 1024)}KiB`);
   }
   return results;
+}
+
+// The flow, RUNS times, each in a fresh browser. Per step, the median of each metric.
+async function measureFlow() {
+  const runs = [];
+  const visited = SETUP.flow.filter((s) => s.goto).map((s) => s.goto).concat(['/needs', '/trades', '/trades?page=2']);
+  for (let i = 0; i < RUNS; i++) {
+    await warm(...visited);
+    runs.push(await runFlow({ origin: APP_ORIGIN, steps: SETUP.flow, chromeArgs: CHROME_FLAGS.filter((f) => f.startsWith('--ignore-certificate')) }));
+  }
+  const steps = SETUP.flow.map(({ name }, i) => {
+    const each = runs.map((r) => r[i]);
+    const types = [...new Set(each.map((s) => s.type))];
+    const med = (key, d = 0) => round(median(each.map((s) => s[key])), d);
+    return { name, type: types.join('/'), lcp: med('lcp'), fcp: med('fcp'), cls: med('cls', 3), clickToOrigin: med('clickToOrigin', 1), bytes: med('bytes'), requests: med('requests') };
+  });
+  for (const s of steps) console.log(`  ${s.name.padEnd(14)} ${s.type.padEnd(5)} LCP ${s.lcp}ms  CLS ${s.cls}  ${round(s.bytes / 1024)}KiB in ${s.requests} requests`);
+  return { webVitals: WEB_VITALS_VERSION, throttling: THROTTLING, steps, runs };
 }
 
 // ----- Code stats -----
@@ -137,13 +197,17 @@ function codeStats() {
 
 // ----- Main -----
 
-const results = { appDir, measuredAt: new Date().toISOString(), runs: RUNS };
+const results = { appDir, scenario: SCENARIO, measuredAt: new Date().toISOString(), runs: RUNS };
 console.log(`Measuring ${appDir}`);
-const stack = await startStack(appDir, { template: TEMPLATE, apiEnv: { LATENCY_MS: '0' }, build: !args.includes('--skip-build') });
+const stack = await startStack(appDir, { template: TEMPLATE, apiEnv: SETUP.apiEnv, build: !args.includes('--skip-build') });
 CHROME_FLAGS.push(stack.chromeCertFlag);
 try {
   console.log('Lighthouse:');
   results.lighthouse = await runLighthouse();
+  if (SETUP.flow) {
+    console.log('Flow:');
+    results.flow = await measureFlow();
+  }
   results.code = codeStats();
 } finally {
   await stack.stop();
