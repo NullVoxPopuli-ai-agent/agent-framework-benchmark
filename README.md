@@ -295,6 +295,8 @@ node measure.mjs ../scenarios/pokedex/gold /tmp/gold-results --runs 1 --skip-bui
   Pokémon's Height inside a component's shadow root would fail those checks. No app so far
   has: Gracile's shadow-DOM components hold only the list and the moves table, which the
   tests check through roles. The helpers are left as they are, so the tests match what
-  earlier agents saw.
+  earlier agents saw. dex-tracker's tests don't have this problem: every text check reads
+  the rendered page, into open shadow roots and through slots. They pass against the gold
+  app with its content moved into shadow roots, both directly and through slots.
 - **One iteration is an anecdote.** Agent runs vary a lot; use 3 or more iterations before
   drawing conclusions.
