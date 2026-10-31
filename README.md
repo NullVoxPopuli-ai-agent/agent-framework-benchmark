@@ -262,6 +262,11 @@ node measure.mjs ../scenarios/pokedex/gold /tmp/gold-results --runs 1 --skip-bui
 - **dex-tracker's charts are hand-drawn.** The spec forbids charting libraries, so the
   benchmark measures the framework rather than the library an agent happened to pick. Real
   dashboards usually use a library; this is a trade-off for comparability.
+- **dex-tracker's tests use plain HTTP; its measurements use HTTPS.** Frameworks that check
+  where form submissions come from disagree about which protocol they're served over, so
+  SvelteKit needs a workaround to pass the tests, and an Astro or Qwik app can pass them yet
+  reject form submissions behind the proxy (the measurements never submit forms). See
+  `docs/decisions/2026-10-31-plain-http-tests.md`.
 - **Styling is constrained**: shared design tokens, system fonts, no CSS frameworks or
   component libraries, no animations. This keeps visual and CSS differences from dominating
   the results.
