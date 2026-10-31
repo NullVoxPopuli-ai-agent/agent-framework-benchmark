@@ -7,7 +7,7 @@
 #
 # The app is at http://localhost:<port> (default 3000) and the API at <port> + 6000, so two
 # apps can run side by side: `bench/serve.sh runs/x/astro-1` and `bench/serve.sh runs/x/next-1 3001`.
-# LATENCY_MS sets the API's added latency (default 30, as in the tests and measurements).
+# LATENCY_MS sets the API's added latency (default 30, as in dex-tracker's tests and measurements).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

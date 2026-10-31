@@ -7,7 +7,7 @@
 > PRs are closed on this project. If you want to improve it, please open an issue or create a fork. I don't intend to maintain this benchmark forever and keep running new benchmarks on new frameworks endlessly. I'd be much more interested to see what you all build with this project (and run with your own tokens 🙂).
 
 > [!NOTE]
-> [Benchmark results](https://github.com/nolanlawson/agent-framework-benchmark-results) for the blog post are available if you want to peruse them. To reproduce the results, you would run `node bench/run.mjs --frameworks=all --iterations=5 --effort=high` in this repo.
+> [Benchmark results](https://github.com/nolanlawson/agent-framework-benchmark-results) for the blog post are available if you want to peruse them. To reproduce the results, you would run `node bench/run.mjs --frameworks=next,nuxt,tanstack-start,react-router,solidstart,sveltekit,angular,astro,qwik,gracile,hono-htmx,vanilla --iterations=5 --effort=high` in this repo (`all` now includes frameworks added later).
 
 How many tokens, and how much time, does a coding agent need to build the same
 non-trivial web app in different frameworks? And how fast is the app it builds?
@@ -51,7 +51,7 @@ node bench/run.mjs --frameworks=all --iterations=3
 The run creates `runs/<timestamp>/`, and the results end up in `runs/<timestamp>/report.md`.
 
 The Pokémon data (about 2 GB, from pinned commits of PokeAPI's repos) is downloaded **once**,
-when the `pokedex-base` image is first built. It sits in an image layer that later builds
+when the `<scenario>-base` image is first built. It sits in an image layer that later builds
 reuse, so no agent ever downloads it and it costs no tokens. Only `--no-cache`, or a
 change to the scenario's `template/scripts/`, downloads it again.
 
@@ -98,19 +98,19 @@ credential. Use a key with a spending limit.
 1. **Images.** `bench/container/export-template.sh` copies the scenario's `template/` into a fresh git repo
    with a single commit, so agents can't see this repo's history, the gold-standard app or the
    measurement code. Then three images are built:
-   - **`pokedex-base`**: Ubuntu 24.04, Node 24, Playwright's Chromium, and the exported repo.
+   - **`<scenario>-base`** (`pokedex-base`, `dex-tracker-base`): Ubuntu 24.04, Node 24, Playwright's Chromium, and the exported repo.
      The Pokémon data is downloaded here, once, by `scripts/setup-data.sh` in the template. It
      fetches pinned commits of PokeAPI's `api-data`, `sprites` (a subset) and `cries`, and
      rewrites media URLs to point at the local API server.
-   - **`pokedex-agent`**: adds Claude Code and `agent-browser`, and sets `IS_SANDBOX=1`.
-   - **`pokedex-measure`**: adds Caddy and the measurement scripts.
+   - **`<scenario>-agent`**: adds Claude Code and `agent-browser`, and sets `IS_SANDBOX=1`.
+   - **`<scenario>-measure`**: adds Caddy and the measurement scripts.
 2. **Agents.** For each framework and iteration, one at a time, `run-agent.sh` runs in a new
    agent container:
    - It installs the framework's official AI tooling (see below).
    - It runs `claude -p "<prompt>" --dangerously-skip-permissions --output-format stream-json`,
      with no other MCP servers.
    - When the agent stops, it saves the agent's repo.
-   - Then the agent's `app/`, and only that, is copied into a fresh `pokedex-base` container,
+   - Then the agent's `app/`, and only that, is copied into a fresh `<scenario>-base` container,
      where `npm test` runs. Whatever else the agent changed (tests, data, `node_modules`) or
      left running can't affect the result.
    - `pokeapi.co` resolves to localhost, so the app can only use the local API.
@@ -154,8 +154,11 @@ cold loads Lighthouse measures for this scenario use `throttlingMethod: 'devtool
 all numbers share one throttling method.
 
 This breaks comparability with the pokedex results, which used simulated throttling.
-DevTools throttling adds latency per request rather than per packet, so it gets connection
-setup and HTTP/2 multiplexing only roughly right; it does so the same way for every app.
+DevTools throttling adds latency per request rather than per packet. Its 562.5 ms per request
+stands in for a cold connection's DNS, TCP and TLS setup, but it's charged on warm connections
+too, so a click costs about 590 ms per sequential round trip: the click numbers largely count
+round trips, and an app that needs two in a row (say, data and then a route's code) pays
+about 3.75 times what it would on a real slow-4G phone.
 
 The API adds 30 ms to every request, for the browser and the app server alike, so server
 rendering doesn't get its data for free.
@@ -224,10 +227,10 @@ To try an app in a browser: `bench/serve.sh runs/<id>/<framework>-<n> [port]`. I
 | `scenarios/<name>/template/` | Everything an agent sees: `SPEC.md`, `api/server.mjs` (local PokeAPI), `scripts/setup-data.sh`, `tests/`, `design/` |
 | `scenarios/<name>/template/tests/` | Playwright acceptance tests that query roles, accessible names and text, not DOM structure. `run.mjs` builds the app against the normal API, then runs it against an API with changed data (`fixtures/live-data-overlay.json`) to catch apps that bake data in at build time |
 | `scenarios/<name>/gold/` | Reference implementation. It produced `template/design/screenshots/` and is used to check the tests (`APP_DIR=../gold npm test` in `template/`). Agents never see it |
-| `scenarios/dex-tracker/api-tests/` | Checks that the dex-tracker API works and matches `api/openapi.json` (`node --test scenarios/dex-tracker/api-tests/`), and the script that writes `openapi.json`. Not part of a run; agents never see them |
+| `scenarios/dex-tracker/api-tests/` | Checks that the dex-tracker API works and matches `api/openapi.json` (`node --test scenarios/dex-tracker/api-tests/*.test.mjs`), and the script that writes `openapi.json`. Not part of a run; agents never see them |
 | `bench/run.mjs` | The orchestrator |
 | `bench/container/` | Containerfiles, the export script, the agent entrypoint and the tooling setup |
-| `bench/measure.mjs`, `stack.mjs` | Measurement (run inside `pokedex-measure`) |
+| `bench/measure.mjs`, `stack.mjs` | Measurement (run inside `<scenario>-measure`) |
 | `bench/screenshots.mjs` | Captures the reference screenshots from a scenario's `gold/` |
 | `bench/report.mjs`, `tokens.mjs` | Report generation |
 | `docs/audits/` | Periodic code audits: findings, and what was decided on each and why. One file per audit, named by date |

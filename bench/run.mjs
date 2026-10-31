@@ -248,7 +248,7 @@ function extractRepo(iterDir) {
   return repo;
 }
 
-// Runs the original tests against the agent's app/ in a fresh pokedex-base container. Only
+// Runs the original tests against the agent's app/ in a fresh <scenario>-base container. Only
 // app/ is copied in, so changes to tests/, data/ or node_modules, or servers the agent left
 // running, can't affect the result. Appends final_test_exit to agent/run-info.txt.
 async function testApp(iterDir) {
