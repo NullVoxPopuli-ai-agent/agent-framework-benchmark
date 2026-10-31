@@ -16,6 +16,7 @@ export const FRAMEWORKS = {
   'react-vite': 'React with Vite',
   'preact-vite': 'Preact with Vite',
   'lit-vite': 'Lit with Vite',
+  marko: 'Marko with Marko Run',
 };
 
 // The only thing that differs between agents is the framework label.

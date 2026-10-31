@@ -87,6 +87,12 @@ case "$FRAMEWORK" in
     # https://hono.dev/docs/agents (no official htmx tooling)
     skill honojs/skills
     ;;
+  marko)
+    # The marko-js/marko repo's skill (https://github.com/marko-js/marko/blob/main/skills/README.md).
+    # Cheat sheets ship in node_modules (marko, @marko/run), and Marko Run points Claude Code to
+    # them in its error messages.
+    skill marko-js/marko --skill marko-best-practices
+    ;;
   react-router)
     # The skill create-react-router copies into new apps (.agents/skills/react-router), installed
     # up front because agents don't always use create-react-router. Docs ship in node_modules.

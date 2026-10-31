@@ -63,7 +63,7 @@ Agents, and the apps they write, only ever run inside containers.
 | Option | Default | |
 | --- | --- | --- |
 | `--scenario=NAME` | `pokedex` | The app agents build: a directory in `scenarios/`. With `--append-to`, `--measure-only` or `--report-only`, the run's own scenario is used |
-| `--frameworks=a,b` or `all` | (required) | Keys from `bench/frameworks.mjs`: `next`, `nuxt`, `tanstack-start`, `react-router`, `solidstart`, `sveltekit`, `angular`, `astro`, `qwik`, `gracile`, `hono-htmx`, `vanilla`, `react-vite`, `preact-vite`, `lit-vite` |
+| `--frameworks=a,b` or `all` | (required) | Keys from `bench/frameworks.mjs`: `next`, `nuxt`, `tanstack-start`, `react-router`, `solidstart`, `sveltekit`, `angular`, `astro`, `qwik`, `gracile`, `hono-htmx`, `vanilla`, `react-vite`, `preact-vite`, `lit-vite`, `marko` |
 | `--iterations=N` | 1 | Agent runs per framework |
 | `--model=ID` | `claude-opus-5-5` | Passed to `claude --model` |
 | `--effort=LEVEL` | `medium` | Passed to `claude --effort` (`low`, `medium`, `high`, `xhigh`, `max`) |
@@ -189,6 +189,7 @@ the tooling; whether they do is recorded (MCP and skill calls are in the transcr
 | Angular | Angular CLI MCP server (`ng mcp`), Angular agent skills |
 | React Router | React Router skill (the one `create-react-router` adds to new apps); docs ship in `node_modules` |
 | Hono + htmx | Hono skills (nothing official for htmx) |
+| Marko + Marko Run | `marko-best-practices` skill from the `marko-js/marko` repo; cheat sheets ship in `node_modules` (`marko`, `@marko/run`), and Marko Run's error messages point Claude Code to them |
 | TanStack Start | None. Its packages ship skills in `node_modules` (TanStack Intent), and `@tanstack/cli create` tries to wire them up, but that step needs an interactive terminal and fails in non-interactive use. Start's docs don't mention them |
 | SolidStart, Qwik, Gracile + Lit, vanilla, Preact + Vite | None (only community-made tooling exists) |
 | React + Vite | None. React's only official agent tool, `react-devtools-cdt-mcp` (experimental, September 2026), is a debugging add-on for Chrome DevTools MCP that the app has to import in its own entry file, so it can't be set up before the app exists |
