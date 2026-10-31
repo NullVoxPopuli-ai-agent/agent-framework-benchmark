@@ -76,7 +76,7 @@ function metrics(it) {
     flowNavType: m?.flow?.steps[1]?.type ?? null,
     // The element Chrome picked as the first click's LCP, as a tag name ("h1", "td", "img"):
     // a heading means the number may not include the data (see the README).
-    flowNavLcpElement: [...new Set((m?.flow?.steps[1]?.lcpTargets ?? []).map((t) => t.split('>').at(-1).match(/^[a-z0-9-]+/i)?.[0]))].join('/') || null,
+    flowNavLcpElement: m?.flow?.steps[1]?.lcpTags?.join('/') || null,
   };
 }
 

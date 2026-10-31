@@ -160,8 +160,8 @@ async function measureFlow() {
     const each = runs.map((r) => r[i] ?? { type: 'skipped' });
     const types = [...new Set(each.map((s) => s.type))];
     const med = (key, d = 0) => (each.every((s) => typeof s[key] === 'number') ? round(median(each.map((s) => s[key])), d) : null);
-    const targets = [...new Set(each.map((s) => s.lcpTarget).filter(Boolean))];
-    return { name, type: types.join('/'), lcp: med('lcp'), lcpTargets: targets, fcp: med('fcp'), cls: med('cls', 3), clickToOrigin: med('clickToOrigin', 1) };
+    const distinct = (key) => [...new Set(each.map((s) => s[key]).filter(Boolean))];
+    return { name, type: types.join('/'), lcp: med('lcp'), lcpTags: distinct('lcpTag'), lcpTargets: distinct('lcpTarget'), fcp: med('fcp'), cls: med('cls', 3), clickToOrigin: med('clickToOrigin', 1) };
   });
   for (const s of steps) console.log(`  ${s.name.padEnd(14)} ${s.type.padEnd(5)} LCP ${s.lcp}ms  CLS ${s.cls}  ${s.lcpTargets.join(' | ')}`);
   return { webVitals: WEB_VITALS_VERSION, throttling: THROTTLING, steps, runs };

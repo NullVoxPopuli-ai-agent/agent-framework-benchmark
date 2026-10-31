@@ -34,6 +34,7 @@ const INIT = `${WEB_VITALS}
   const send = (m) => window.__vital?.(JSON.stringify({
     name: m.name, value: m.value, navigationType: m.navigationType, url: m.navigationURL ?? location.href,
     timeOrigin: performance.timeOrigin, target: m.attribution?.target ?? null,
+    tag: m.entries.at(-1)?.element?.localName ?? null, // the selector has no tag for an element with an id
   }));
   const options = { reportAllChanges: true, reportSoftNavs: true };
   for (const on of [webVitals.onLCP, webVitals.onFCP, webVitals.onCLS, webVitals.onINP]) on(send, options);
@@ -43,7 +44,7 @@ const INIT = `${WEB_VITALS}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // One session. steps: [{ name, goto } | { name, click: (page) => Locator, url: RegExp }].
-// Returns one result per step: { name, type: 'load' | 'soft' | 'hard' | 'none', lcp, lcpTarget, fcp, cls, ... }.
+// Returns one result per step: { name, type: 'load' | 'soft' | 'hard' | 'none', lcp, lcpTarget, lcpTag, fcp, cls, ... }.
 // A step that fails (say, a link the app doesn't show at this viewport) is recorded as
 // { name, type: 'error', error } and ends the session, since later steps start from it.
 export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500, timeoutMs = 30_000 }) {
@@ -128,6 +129,7 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
           clickToOrigin: step.goto ? null : gap,
           lcp: last('LCP', own) === null ? null : last('LCP', own) + gap,
           lcpTarget: lastOf('LCP', own)?.target ?? null,
+          lcpTag: lastOf('LCP', own)?.tag ?? null,
           fcp: last('FCP', own) === null ? null : last('FCP', own) + gap,
           cls: last('CLS', own),
         });
@@ -138,6 +140,7 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
           type: detected ? 'soft' : 'none',
           lcp: last('LCP', soft),
           lcpTarget: lastOf('LCP', soft)?.target ?? null,
+          lcpTag: lastOf('LCP', soft)?.tag ?? null,
           fcp: last('FCP', soft),
           cls: last('CLS', soft),
         });

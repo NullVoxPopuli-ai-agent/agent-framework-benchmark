@@ -143,8 +143,20 @@ with `reportSoftNavs`. Chrome 151 and later detect [soft navigations](https://de
 interaction, as CrUX now does. A click that loads a new document gets that document's LCP,
 plus the time from the click to its time origin (usually a few milliseconds), so both kinds
 of navigation are measured from the click. The tests require every link to be one or the
-other, so no app can end up with no number. The session continues with three more clicks
-(a Pokémon, `Trades`, `Next page`), recorded in `results.json` but not in the headline.
+other. They click at a desktop size, though, and the session clicks at a phone size, so a
+click can still fail in the session (a link behind a menu, say). Such a step is recorded as
+an error and the session stops there; the rest of the measurement is kept. The session
+continues with three more clicks (a Pokémon, `Trades`, `Next page`), recorded in
+`results.json` but not in the headline.
+
+LCP is the largest element painted, which isn't always the data. The charts are SVG, which
+LCP ignores, and table cells are small, so on `/` and `/trades`, and on `/needs` with CSS like
+the gold app's, the LCP element is usually the `h1`. That's fine when the heading arrives
+with the data, as in a server-rendered page. But an app that paints its heading before its
+data has arrived (a loading state) gets a low number that doesn't include the data. Each
+step records its LCP element, and the report shows it for the first click, so these cases
+are visible. A timing of a data element (Element Timing) would avoid this, but it needs an
+attribute on the element, which only the app could add cleanly; it's left out for now.
 
 Throttling and emulation are Lighthouse's mobile defaults (562.5 ms request latency,
 1.4 Mbps, 4× CPU slowdown, Moto G Power screen), applied through the DevTools protocol the
