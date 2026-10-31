@@ -212,6 +212,8 @@ For each iteration, `runs/<id>/<framework>-<n>/` contains:
 
 To summarize a single transcript: `node bench/tokens.mjs runs/<id>/<framework>-<n>/agent/transcript.jsonl`.
 
+To try an app in a browser: `bench/serve.sh runs/<id>/<framework>-<n> [port]`. It builds and serves the app in production mode with its scenario's API, in the scenario's base image, at `http://localhost:3000` by default.
+
 ## Repository layout
 
 | Path | |
