@@ -13,6 +13,9 @@ export const FRAMEWORKS = {
   gracile: 'Gracile with Lit',
   'hono-htmx': 'Hono and htmx',
   vanilla: 'vanilla JavaScript or TypeScript with Vite, without a UI framework',
+  'react-vite': 'React with Vite',
+  'preact-vite': 'Preact with Vite',
+  'lit-vite': 'Lit with Vite',
 };
 
 // The only thing that differs between agents is the framework label.

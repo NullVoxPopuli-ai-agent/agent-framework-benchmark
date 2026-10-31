@@ -92,8 +92,10 @@ case "$FRAMEWORK" in
     # up front because agents don't always use create-react-router. Docs ship in node_modules.
     skill remix-run/react-router --skill react-router
     ;;
-  tanstack-start | solidstart | qwik | gracile | vanilla)
-    # No official agent tooling (TanStack removed its MCP server in favour of its CLI).
+  tanstack-start | solidstart | qwik | gracile | vanilla | react-vite | preact-vite | lit-vite)
+    # No official agent tooling (TanStack removed its MCP server in favour of its CLI; React's
+    # experimental react-devtools-cdt-mcp is an import inside the app, not something to install
+    # up front; Lit's MCP server was merged but never published). See the README.
     ;;
   *)
     echo "Unknown framework: $FRAMEWORK" >&2
