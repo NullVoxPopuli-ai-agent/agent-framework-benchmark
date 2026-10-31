@@ -1,7 +1,7 @@
 // Writes through the app. These run after every other test (see playwright.config.mjs),
 // one at a time, since they change totals the other tests check.
 import { test, expect } from '@playwright/test';
-import { api, num, main, section, table, rows, optionTexts, expectDefinitions } from './helpers.mjs';
+import { api, num, main, section, table, rows, optionTexts, expectDefinitions, expectText, expectContainsText } from './helpers.mjs';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -32,7 +32,7 @@ test.describe('Writes', () => {
     const trade = await api(`/api/trades/${id}`);
     expect(trade.received.name).toBe('mr-mime');
     expect(trade.friend.name).toBe('Benchmon Fan');
-    await expect(main(page).getByRole('heading', { level: 1 })).toHaveText(`Trade #${id}`);
+    await expectText(main(page).getByRole('heading', { level: 1 }), `Trade #${id}`);
     await expectDefinitions(main(page), [
       ['Friend', 'Benchmon Fan'],
       ['Game', game.displayName],
@@ -44,10 +44,10 @@ test.describe('Writes', () => {
     await page.goto('/trades');
     await expect.poll(async () => (await rows(table(main(page), 'Trades')))[0]?.slice(1, 5)).toEqual(['Benchmon Fan', game.displayName, 'Pikachu', 'Mr. Mime']);
     await page.goto('/');
-    await expect(section(page, 'Summary').getByRole('definition').nth(2)).toHaveText(num(before.tradeCount + 1));
-    await expect(section(page, 'Recent activity').getByRole('listitem').first()).toContainText('Traded Pikachu to Benchmon Fan for Mr. Mime');
+    await expectText(section(page, 'Summary').getByRole('definition').nth(2), num(before.tradeCount + 1));
+    await expectContainsText(section(page, 'Recent activity').getByRole('listitem').first(), 'Traded Pikachu to Benchmon Fan for Mr. Mime');
     await page.goto('/friends/151');
-    await expect(table(section(page, 'Recent trades'), 'Recent trades with Benchmon Fan').getByRole('row').nth(1)).toContainText('Mr. Mime');
+    await expectContainsText(table(section(page, 'Recent trades'), 'Recent trades with Benchmon Fan').getByRole('row').nth(1), 'Mr. Mime');
   });
 
   test('a rejected trade shows why', async ({ page }) => {
@@ -66,16 +66,16 @@ test.describe('Writes', () => {
     const hunt = (await api('/api/hunts?status=active&pageSize=1')).items[0];
     await page.goto(`/hunts/${hunt.id}`);
     const encounters = () => main(page).getByRole('definition').nth(5);
-    await expect(encounters()).toHaveText(num(hunt.encounters));
+    await expectText(encounters(), num(hunt.encounters));
     const button = main(page).getByRole('button', { name: 'Add encounter', exact: true });
     for (let i = 1; i <= 3; i++) {
       await button.click();
-      await expect(encounters()).toHaveText(num(hunt.encounters + i));
+      await expectText(encounters(), num(hunt.encounters + i));
     }
     await expect.poll(async () => (await api(`/api/hunts/${hunt.id}`)).encounters).toBe(hunt.encounters + 3);
     await page.reload();
-    await expect(encounters()).toHaveText(num(hunt.encounters + 3));
+    await expectText(encounters(), num(hunt.encounters + 3));
     await page.goto('/hunts?status=active');
-    await expect(table(main(page), 'Hunts').getByRole('row').filter({ hasText: hunt.species.displayName }).first()).toContainText(num(hunt.encounters + 3));
+    await expectContainsText(table(main(page), 'Hunts').getByRole('row').filter({ hasText: hunt.species.displayName }).first(), num(hunt.encounters + 3));
   });
 });

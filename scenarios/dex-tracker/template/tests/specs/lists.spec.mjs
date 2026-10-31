@@ -1,6 +1,6 @@
 // The paged, filtered lists: Needs, Catches, Trades and Shiny hunts.
 import { test, expect } from '@playwright/test';
-import { api, num, dex, orDash, yesNo, main, table, phrase, expectOptions, expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, rows } from './helpers.mjs';
+import { api, num, dex, orDash, yesNo, main, table, phrase, expectOptions, expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, rows, expectText } from './helpers.mjs';
 
 const needRow = (n) => [
   dex(n.species.id),
@@ -211,7 +211,7 @@ test.describe('Trades', () => {
 
     const plain = await api('/api/trades/1');
     await page.goto('/trades/1');
-    await expect(main(page).getByRole('definition').last()).toHaveText(plain.evolved ? /^Yes/ : 'No');
+    await expectText(main(page).getByRole('definition').last(), plain.evolved ? /^Yes/ : 'No');
   });
 });
 
@@ -242,7 +242,7 @@ test.describe('Shiny hunts', () => {
   test('shows a hunt', async ({ page }) => {
     const h = (await api('/api/hunts?status=completed&pageSize=1')).items[0];
     await page.goto(`/hunts/${h.id}`);
-    await expect(main(page).getByRole('heading', { level: 1 })).toHaveText(`${h.species.displayName} hunt`);
+    await expectText(main(page).getByRole('heading', { level: 1 }), `${h.species.displayName} hunt`);
     await expectDefinitions(main(page), [
       ['Game', h.game.displayName],
       ['Method', h.method],

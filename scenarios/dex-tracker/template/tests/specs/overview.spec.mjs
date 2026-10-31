@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { api, num, percent, parts, section, expectDefinitions, expectChart, expectHeaders, expectRows, expectHref, textOf } from './helpers.mjs';
+import { api, num, percent, parts, section, expectDefinitions, expectChart, expectHeaders, expectRows, expectHref, textOf, expectContainsText } from './helpers.mjs';
 
 test.describe('Overview', () => {
   test('shows the summary', async ({ page }) => {
@@ -70,6 +70,6 @@ test.describe('Overview', () => {
   test('shows changes made to the data after the build', async ({ page }) => {
     // tests/fixtures/live-data.sql adds a trade with a new friend today.
     await page.goto('/');
-    await expect(section(page, 'Recent activity').getByRole('listitem').first()).toContainText('Benchmon Fan');
+    await expectContainsText(section(page, 'Recent activity').getByRole('listitem').first(), 'Benchmon Fan');
   });
 });

@@ -28,13 +28,57 @@ export const main = (page) => page.getByRole('main');
 // A section: an element with the region role, named by its heading.
 export const section = (page, name) => main(page).getByRole('region', { name, exact: true });
 
-// Visible text with whitespace collapsed, for checks that don't depend on structure.
+// ---------- Text, wherever the app puts it ----------
+//
+// Every text check goes through flatText, so it doesn't matter whether an app uses shadow
+// DOM. innerText (and Playwright's innerText and allInnerTexts) leave out text inside shadow
+// roots, and Playwright's toHaveText reads slotted content out of order. flatText reads the
+// page as it's rendered: into shadow roots, and through slots to what's assigned to them.
+// Where there's no shadow DOM it's innerText, so plain-DOM apps see no difference.
+// Runs in the page: takes one element or an array of them, returns whitespace-collapsed text.
+const flatText = (target) => {
+  const display = (el) => getComputedStyle(el).display;
+  const inline = new Set(['inline', 'inline-block', 'inline-flex', 'inline-grid', 'contents']);
+  const hasShadow = (el) => !!el.shadowRoot || el.localName === 'slot' || [...el.querySelectorAll('*')].some((e) => e.shadowRoot || e.localName === 'slot');
+  const text = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return node.data;
+    if (node.nodeType !== Node.ELEMENT_NODE || ['script', 'style', 'template'].includes(node.localName)) return '';
+    const d = display(node);
+    if (d === 'none') return '';
+    let inner;
+    if (!hasShadow(node)) inner = node.innerText ?? node.textContent; // SVG elements have no innerText
+    else {
+      const assigned = node.localName === 'slot' ? node.assignedNodes({ flatten: true }) : [];
+      const kids = node.shadowRoot ? node.shadowRoot.childNodes : assigned.length ? assigned : node.childNodes;
+      inner = [...kids].map(text).join('');
+    }
+    return inline.has(d) ? inner : ` ${inner} `;
+  };
+  const one = (el) => text(el).replace(/\s+/g, ' ').trim();
+  return Array.isArray(target) ? target.map(one) : one(target);
+};
+
+// The text of the one element the locator finds (waits for it).
 export async function textOf(locator) {
-  return (await locator.innerText()).replace(/\s+/g, ' ').trim();
+  return locator.evaluate(flatText);
 }
 
-export async function expectText(locator, pattern) {
-  await expect.poll(() => textOf(locator)).toMatch(pattern);
+// The texts of every element the locator finds (doesn't wait).
+export async function textsOf(locator) {
+  return locator.evaluateAll(flatText);
+}
+
+// Like toHaveText: a string must match the whole text, a regex must match it, and an array
+// gives the texts of every element the locator finds, in order.
+export async function expectText(locator, expected) {
+  if (Array.isArray(expected)) await expect.poll(() => textsOf(locator)).toEqual(expected);
+  else if (expected instanceof RegExp) await expect.poll(() => textOf(locator)).toMatch(expected);
+  else await expect.poll(() => textOf(locator)).toBe(expected);
+}
+
+// Like toContainText.
+export async function expectContainsText(locator, text) {
+  await expect.poll(() => textOf(locator)).toContain(text);
 }
 
 // Matches text made of these parts in order, with only spaces or punctuation between them
@@ -58,10 +102,9 @@ export async function expectHref(link, href) {
 
 export const table = (scope, name) => scope.getByRole('table', { name, exact: true });
 
-const clean = (t) => t.replace(/\s+/g, ' ').trim();
 
 export async function headers(tbl) {
-  return (await tbl.getByRole('columnheader').allInnerTexts()).map(clean);
+  return textsOf(tbl.getByRole('columnheader'));
 }
 
 // Cell texts of every data row (rows without column headers).
@@ -70,7 +113,7 @@ export async function rows(tbl) {
   const out = [];
   for (const row of all) {
     if (await row.getByRole('columnheader').count()) continue;
-    out.push((await row.getByRole('cell').or(row.getByRole('rowheader')).allInnerTexts()).map(clean));
+    out.push(await textsOf(row.getByRole('cell').or(row.getByRole('rowheader'))));
   }
   return out;
 }
@@ -91,8 +134,8 @@ export const rowWith = (tbl, ...texts) => texts.reduce((loc, t) => loc.filter({ 
 
 // [term, definition] pairs in document order.
 export async function definitions(scope) {
-  const terms = (await scope.getByRole('term').allInnerTexts()).map(clean);
-  const defs = (await scope.getByRole('definition').allInnerTexts()).map(clean);
+  const terms = await textsOf(scope.getByRole('term'));
+  const defs = await textsOf(scope.getByRole('definition'));
   return terms.map((t, i) => [t, defs[i]]);
 }
 
@@ -109,7 +152,7 @@ export async function expectDefinitions(scope, expected) {
 // ---------- Controls ----------
 
 export async function optionTexts(select) {
-  return (await select.locator('option').allInnerTexts()).map(clean);
+  return textsOf(select.locator('option'));
 }
 
 // Retries, so options filled in after the page loads (fetched in the browser) are found.

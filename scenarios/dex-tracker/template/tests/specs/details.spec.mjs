@@ -1,9 +1,6 @@
 // Games, friends and Pokémon: the list and detail pages.
 import { test, expect } from '@playwright/test';
-import {
-  api, num, dex, yesNo, orDash, ratioPercents, parts, main, section, table, phrase, rows, expectOptions,
-  expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, expectChart, textOf,
-} from './helpers.mjs';
+import { api, num, dex, yesNo, orDash, ratioPercents, parts, main, section, table, phrase, rows, expectOptions, expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, expectChart, textOf, expectText, expectContainsText } from './helpers.mjs';
 
 test.describe('Games', () => {
   test('lists owned games', async ({ page }) => {
@@ -23,7 +20,7 @@ test.describe('Games', () => {
     const id = (await api('/api/games')).items.sort((a, b) => b.lastPlayed.localeCompare(a.lastPlayed))[0].game.id;
     const g = await api(`/api/games/${id}`);
     await page.goto(`/games/${id}`);
-    await expect(main(page).getByRole('heading', { level: 1 })).toHaveText(g.game.displayName);
+    await expectText(main(page).getByRole('heading', { level: 1 }), g.game.displayName);
     await expectDefinitions(main(page), [
       ['Generation', g.game.generation.displayName],
       ['Platform', g.game.platform],
@@ -42,7 +39,7 @@ test.describe('Games', () => {
 
     if (g.counterpart) {
       const s = section(page, 'Version exclusives');
-      await expect(s).toContainText(`Found in the wild in ${g.counterpart.displayName} but not in ${g.game.displayName}`);
+      await expectContainsText(s, `Found in the wild in ${g.counterpart.displayName} but not in ${g.game.displayName}`);
       if (g.counterpartExclusives.length) {
         const items = s.getByRole('listitem');
         await expect(items).toHaveCount(g.counterpartExclusives.length);
@@ -76,7 +73,7 @@ test.describe('Games', () => {
     const id = (await api('/api/meta')).games.find((g) => !owned.has(g.id)).id;
     const g = await api(`/api/games/${id}`);
     await page.goto(`/games/${id}`);
-    await expect(main(page).getByRole('heading', { level: 1 })).toHaveText(g.game.displayName);
+    await expectText(main(page).getByRole('heading', { level: 1 }), g.game.displayName);
     await expect(phrase(main(page), "You don't own this game.")).toBeVisible();
     await expect(section(page, 'Hours per month')).toHaveCount(0);
     await expect(phrase(section(page, 'Pokédex'), `0 of ${num(g.dexSize)} caught`)).toBeVisible();
@@ -129,7 +126,7 @@ test.describe('Friends', () => {
     const f = await api(`/api/friends/${top.id}`);
     const recent = await api(`/api/trades?friend=${f.friend.id}&pageSize=10`);
     await page.goto(`/friends/${f.friend.id}`);
-    await expect(main(page).getByRole('heading', { level: 1 })).toHaveText(f.friend.name);
+    await expectText(main(page).getByRole('heading', { level: 1 }), f.friend.name);
     await expectDefinitions(main(page), [
       ['Friend code', f.friendCode],
       ['Friends since', f.since],
@@ -138,13 +135,13 @@ test.describe('Friends', () => {
       ['Last trade', orDash(f.lastTradeAt)],
     ]);
     const games = section(page, 'Games').getByRole('link');
-    await expect(games).toHaveText(f.games.map((g) => g.displayName));
+    await expectText(games, f.games.map((g) => g.displayName));
     await expectHref(games.first(), `/games/${f.games[0].id}`);
 
     const help = section(page, 'Can help with');
     if (f.canHelp.length) {
       await expect(phrase(help, `${num(f.canHelp.length)} species you need`)).toBeVisible();
-      await expect(help.getByRole('link')).toHaveText(f.canHelp.map((s) => s.displayName));
+      await expectText(help.getByRole('link'), f.canHelp.map((s) => s.displayName));
     } else await expect(phrase(help, 'Nothing you need')).toBeVisible();
 
     const data = await expectChart(section(page, 'Trades per year'), 'Trades per year', f.tradesByYear.map((y) => ({ label: y.year, value: num(y.count), n: y.count })), { horizontal: false });
@@ -165,7 +162,7 @@ test.describe('Pokémon', () => {
     const catches = await api('/api/species/slowpoke/catches');
     await page.goto('/pokemon/slowpoke');
     const m = main(page);
-    await expect(m.getByRole('heading', { level: 1 })).toHaveText('Slowpoke');
+    await expectText(m.getByRole('heading', { level: 1 }), 'Slowpoke');
     await expect(m.getByText(dex(p.species.id), { exact: true })).toBeVisible();
     await expect(m.getByText(p.species.genus, { exact: true })).toBeVisible();
     await expect(m.getByRole('img', { name: 'Slowpoke', exact: true }).first()).toBeVisible();
@@ -190,7 +187,7 @@ test.describe('Pokémon', () => {
 
     const friends = section(page, 'Friends who have it');
     await expect(phrase(friends, `${num(p.friends.total)} friends`)).toBeVisible();
-    await expect(friends.getByRole('link')).toHaveText(p.friends.items.map((f) => f.name));
+    await expectText(friends.getByRole('link'), p.friends.items.map((f) => f.name));
 
     const mine = table(section(page, 'My catches'), 'My catches of Slowpoke');
     await expectHeaders(mine, ['Date', 'Game', 'Level', 'Method', 'Shiny']);
