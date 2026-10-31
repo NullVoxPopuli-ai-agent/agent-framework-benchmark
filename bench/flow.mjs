@@ -18,10 +18,11 @@ import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import * as lh from 'lighthouse/core/config/constants.js';
 
-// web-vitals' browser build (its package exports don't include it, so it's found by path).
+// web-vitals' browser build, with attribution so each LCP names its element (its package
+// exports don't include it, so it's found by path).
 const require = createRequire(import.meta.url);
 const WEB_VITALS_DIR = path.join(path.dirname(require.resolve('web-vitals')), '..');
-const WEB_VITALS = fs.readFileSync(path.join(WEB_VITALS_DIR, 'dist/web-vitals.iife.js'), 'utf8');
+const WEB_VITALS = fs.readFileSync(path.join(WEB_VITALS_DIR, 'dist/web-vitals.attribution.iife.js'), 'utf8');
 export const WEB_VITALS_VERSION = JSON.parse(fs.readFileSync(path.join(WEB_VITALS_DIR, 'package.json'), 'utf8')).version;
 
 export const THROTTLING = lh.throttling.mobileSlow4G;
@@ -32,7 +33,7 @@ const INIT = `${WEB_VITALS}
 ;(() => {
   const send = (m) => window.__vital?.(JSON.stringify({
     name: m.name, value: m.value, navigationType: m.navigationType, url: m.navigationURL ?? location.href,
-    timeOrigin: performance.timeOrigin,
+    timeOrigin: performance.timeOrigin, target: m.attribution?.target ?? null,
   }));
   const options = { reportAllChanges: true, reportSoftNavs: true };
   for (const on of [webVitals.onLCP, webVitals.onFCP, webVitals.onCLS, webVitals.onINP]) on(send, options);
@@ -42,7 +43,9 @@ const INIT = `${WEB_VITALS}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // One session. steps: [{ name, goto } | { name, click: (page) => Locator, url: RegExp }].
-// Returns one result per step: { name, type: 'load' | 'soft' | 'hard' | 'none', lcp, fcp, cls, ... }.
+// Returns one result per step: { name, type: 'load' | 'soft' | 'hard' | 'none', lcp, lcpTarget, fcp, cls, ... }.
+// A step that fails (say, a link the app doesn't show at this viewport) is recorded as
+// { name, type: 'error', error } and ends the session, since later steps start from it.
 export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500, timeoutMs = 30_000 }) {
   const browser = await chromium.launch({ channel: 'chromium', args: chromeArgs });
   try {
@@ -70,11 +73,9 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
     });
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLING.cpuSlowdownMultiplier });
 
-    // Network activity, for waiting until a step settles and for bytes per step.
+    // Network activity, for waiting until a step settles.
     const inflight = new Set();
     let lastActivity = Date.now();
-    let bytes = 0;
-    let requests = 0;
     cdp.on('Network.requestWillBeSent', (e) => {
       inflight.add(e.requestId);
       lastActivity = Date.now();
@@ -83,11 +84,7 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
       inflight.delete(e.requestId);
       lastActivity = Date.now();
     };
-    cdp.on('Network.loadingFinished', (e) => {
-      bytes += e.encodedDataLength;
-      requests++;
-      done(e);
-    });
+    cdp.on('Network.loadingFinished', done);
     cdp.on('Network.loadingFailed', done);
 
     // A step has settled when the network has been idle for settleMs.
@@ -103,21 +100,25 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
     for (const step of steps) {
       const startedAt = Date.now();
       const fromVital = vitals.length;
-      const bytesBefore = bytes;
-      const requestsBefore = requests;
       const originBefore = step.goto ? null : await documentOrigin();
       lastPointerdown = null;
-      if (step.goto) await page.goto(origin + step.goto, { waitUntil: 'load', timeout: timeoutMs });
-      else {
-        await step.click(page).click({ timeout: timeoutMs });
-        await page.waitForURL(step.url, { timeout: timeoutMs });
+      try {
+        if (step.goto) await page.goto(origin + step.goto, { waitUntil: 'load', timeout: timeoutMs });
+        else {
+          await step.click(page).click({ timeout: timeoutMs });
+          await page.waitForURL(step.url, { timeout: timeoutMs });
+        }
+      } catch (err) {
+        results.push({ name: step.name, type: 'error', error: err.message.split('\n')[0] });
+        break;
       }
       await settle(startedAt);
       const originAfter = await documentOrigin();
       const mine = vitals.slice(fromVital);
-      const last = (name, filter) => mine.filter((v) => v.name === name && filter(v)).at(-1)?.value ?? null;
+      const lastOf = (name, filter) => mine.filter((v) => v.name === name && filter(v)).at(-1);
+      const last = (name, filter) => lastOf(name, filter)?.value ?? null;
 
-      const result = { name: step.name, url: page.url(), bytes: bytes - bytesBefore, requests: requests - requestsBefore };
+      const result = { name: step.name, url: page.url() };
       if (step.goto || originAfter !== originBefore) {
         // A new document: its own LCP, from its time origin.
         const own = (v) => v.timeOrigin === originAfter && v.navigationType !== 'soft-navigation';
@@ -126,6 +127,7 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
           type: step.goto ? 'load' : 'hard',
           clickToOrigin: step.goto ? null : gap,
           lcp: last('LCP', own) === null ? null : last('LCP', own) + gap,
+          lcpTarget: lastOf('LCP', own)?.target ?? null,
           fcp: last('FCP', own) === null ? null : last('FCP', own) + gap,
           cls: last('CLS', own),
         });
@@ -135,6 +137,7 @@ export async function runFlow({ origin, steps, chromeArgs = [], settleMs = 1500,
         Object.assign(result, {
           type: detected ? 'soft' : 'none',
           lcp: last('LCP', soft),
+          lcpTarget: lastOf('LCP', soft)?.target ?? null,
           fcp: last('FCP', soft),
           cls: last('CLS', soft),
         });

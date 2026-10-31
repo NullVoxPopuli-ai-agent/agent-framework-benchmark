@@ -146,7 +146,9 @@ async function runLighthouse() {
   return results;
 }
 
-// The flow, RUNS times, each in a fresh browser. Per step, the median of each metric.
+// The flow, RUNS times, each in a fresh browser. Per step, the median of each metric, or
+// null unless every session produced one (a step that failed or wasn't detected in one
+// session isn't summarized from the others).
 async function measureFlow() {
   const runs = [];
   const visited = SETUP.flow.filter((s) => s.goto).map((s) => s.goto).concat(['/needs', '/trades', '/trades?page=2']);
@@ -155,12 +157,13 @@ async function measureFlow() {
     runs.push(await runFlow({ origin: APP_ORIGIN, steps: SETUP.flow, chromeArgs: CHROME_FLAGS.filter((f) => f.startsWith('--ignore-certificate')) }));
   }
   const steps = SETUP.flow.map(({ name }, i) => {
-    const each = runs.map((r) => r[i]);
+    const each = runs.map((r) => r[i] ?? { type: 'skipped' });
     const types = [...new Set(each.map((s) => s.type))];
-    const med = (key, d = 0) => round(median(each.map((s) => s[key])), d);
-    return { name, type: types.join('/'), lcp: med('lcp'), fcp: med('fcp'), cls: med('cls', 3), clickToOrigin: med('clickToOrigin', 1), bytes: med('bytes'), requests: med('requests') };
+    const med = (key, d = 0) => (each.every((s) => typeof s[key] === 'number') ? round(median(each.map((s) => s[key])), d) : null);
+    const targets = [...new Set(each.map((s) => s.lcpTarget).filter(Boolean))];
+    return { name, type: types.join('/'), lcp: med('lcp'), lcpTargets: targets, fcp: med('fcp'), cls: med('cls', 3), clickToOrigin: med('clickToOrigin', 1) };
   });
-  for (const s of steps) console.log(`  ${s.name.padEnd(14)} ${s.type.padEnd(5)} LCP ${s.lcp}ms  CLS ${s.cls}  ${round(s.bytes / 1024)}KiB in ${s.requests} requests`);
+  for (const s of steps) console.log(`  ${s.name.padEnd(14)} ${s.type.padEnd(5)} LCP ${s.lcp}ms  CLS ${s.cls}  ${s.lcpTargets.join(' | ')}`);
   return { webVitals: WEB_VITALS_VERSION, throttling: THROTTLING, steps, runs };
 }
 
@@ -201,16 +204,20 @@ const results = { appDir, scenario: SCENARIO, measuredAt: new Date().toISOString
 console.log(`Measuring ${appDir}`);
 const stack = await startStack(appDir, { template: TEMPLATE, apiEnv: SETUP.apiEnv, build: !args.includes('--skip-build') });
 CHROME_FLAGS.push(stack.chromeCertFlag);
+// results.json is written even if something fails, with whatever was measured.
 try {
+  results.code = codeStats();
   console.log('Lighthouse:');
   results.lighthouse = await runLighthouse();
   if (SETUP.flow) {
     console.log('Flow:');
     results.flow = await measureFlow();
   }
-  results.code = codeStats();
+} catch (err) {
+  results.error = String(err?.stack ?? err);
+  throw err;
 } finally {
   await stack.stop();
+  fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(results, null, 2));
+  console.log(`Wrote ${path.join(out, 'results.json')}`);
 }
-fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(results, null, 2));
-console.log(`Wrote ${path.join(out, 'results.json')}`);

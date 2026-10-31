@@ -74,7 +74,9 @@ function metrics(it) {
     flowLoadLcp: m?.flow?.steps[0]?.lcp ?? null,
     flowNavLcp: m?.flow?.steps[1]?.lcp ?? null,
     flowNavType: m?.flow?.steps[1]?.type ?? null,
-    flowNavBytes: m?.flow?.steps[1]?.bytes ?? null,
+    // The element Chrome picked as the first click's LCP, as a tag name ("h1", "td", "img"):
+    // a heading means the number may not include the data (see the README).
+    flowNavLcpElement: [...new Set((m?.flow?.steps[1]?.lcpTargets ?? []).map((t) => t.split('>').at(-1).match(/^[a-z0-9-]+/i)?.[0]))].join('/') || null,
   };
 }
 
@@ -82,7 +84,7 @@ const FLOW_COLUMNS = [
   ['Cold load LCP (ms)', (r) => fmt(r.flowLoadLcp)],
   ['First click LCP (ms)', (r) => fmt(r.flowNavLcp)],
   ['First click', (r) => r.flowNavType ?? '—'],
-  ['First click transfer (KiB)', (r) => fmt(r.flowNavBytes, 0, 1 / 1024)],
+  ['First click LCP element', (r) => r.flowNavLcpElement ?? '—'],
 ];
 
 const COLUMNS = [
@@ -142,7 +144,7 @@ export function writeReport(runDir) {
     const ms = its.map(metrics);
     const row = { framework: fw, n: its.length, passed: ms.filter((m) => m.testsPassed).length };
     for (const key of Object.keys(ms[0])) if (key !== 'testsPassed') row[key] = median(ms.map((m) => m[key]));
-    row.flowNavType = [...new Set(ms.map((m) => m.flowNavType).filter(Boolean))].join('/') || null;
+    for (const key of ['flowNavType', 'flowNavLcpElement']) row[key] = [...new Set(ms.flatMap((m) => m[key]?.split('/') ?? []))].join('/') || null;
     return row;
   });
   rows.sort((a, b) => (a.tokens ?? Infinity) - (b.tokens ?? Infinity));
@@ -164,8 +166,10 @@ export function writeReport(runDir) {
 A cold load of \`/\`, then a click on the \`Needs\` link in the same tab. LCP is Chrome's: for a
 soft navigation it's measured from the click; for a new document, from the click to its time
 origin plus its LCP. The first click is \`soft\` (Chrome detected a soft navigation), \`hard\`
-(a new document) or \`none\` (neither, so no LCP). Medians of ${config.lighthouseRuns ?? '?'} sessions. Each
-iteration's measure/results.json has every step.
+(a new document) or \`none\` (neither, so no LCP). Medians of ${config.lighthouseRuns ?? '?'} sessions; a step that
+failed or wasn't detected in any session shows —. The LCP element is the tag Chrome picked:
+\`h1\` means the heading, which an app can paint before its data arrives. Each iteration's
+measure/results.json has every step.
 
 ${table(FLOW_COLUMNS)}
 
