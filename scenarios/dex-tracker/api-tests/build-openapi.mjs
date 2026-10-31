@@ -91,7 +91,7 @@ const schemas = {
 
 const q = (name, schema, description) => ({ name, in: 'query', required: false, schema, ...(description && { description }) });
 const p = (name, schema, description) => ({ name, in: 'path', required: true, schema, ...(description && { description }) });
-const paging = (size) => [q('page', int(null, { minimum: 1, default: 1 })), q('pageSize', int(null, { minimum: 1, maximum: 100, default: size }))];
+const paging = (size) => [q('page', int(null, { minimum: 1, default: 1 })), q('pageSize', int(null, { minimum: 1, maximum: 200, default: size }))];
 const gameQ = q('game', str(), 'Game id, such as `scarlet`');
 
 const json = (schema, description = 'OK') => ({ description, content: { 'application/json': { schema } } });

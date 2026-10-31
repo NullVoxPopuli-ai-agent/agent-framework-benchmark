@@ -112,6 +112,11 @@ export async function optionTexts(select) {
   return (await select.locator('option').allInnerTexts()).map(clean);
 }
 
+// Retries, so options filled in after the page loads (fetched in the browser) are found.
+export async function expectOptions(select, expected) {
+  await expect.poll(() => optionTexts(select)).toEqual(expected);
+}
+
 // Waits until the URL's query has exactly these parameters (order doesn't matter).
 export async function expectQuery(page, params) {
   await expect

@@ -1,6 +1,6 @@
 // The paged, filtered lists: Needs, Catches, Trades and Shiny hunts.
 import { test, expect } from '@playwright/test';
-import { api, num, dex, orDash, yesNo, main, table, phrase, optionTexts, expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, rows } from './helpers.mjs';
+import { api, num, dex, orDash, yesNo, main, table, phrase, expectOptions, expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, rows } from './helpers.mjs';
 
 const needRow = (n) => [
   dex(n.species.id),
@@ -29,7 +29,7 @@ test.describe('Needs', () => {
     const first = data.items[0].species;
     await expectHref(t.getByRole('link', { name: first.displayName, exact: true }), `/pokemon/${first.name}`);
     await expect(t.getByRole('row').nth(1).locator('img')).toHaveCount(1);
-    await expect(m.getByText(pageText(data), { exact: true })).toBeVisible();
+    await expect(phrase(m, pageText(data))).toBeVisible();
     await expect(m.getByRole('link', { name: 'Previous page', exact: true })).toHaveCount(0);
 
     await m.getByRole('link', { name: 'Next page', exact: true }).click();
@@ -41,9 +41,9 @@ test.describe('Needs', () => {
   test('has labelled filters', async ({ page }) => {
     const meta = await api('/api/meta');
     await page.goto('/needs');
-    expect(await optionTexts(page.getByLabel('Generation', { exact: true }))).toEqual(['All generations', ...meta.generations.map((g) => g.displayName)]);
-    expect(await optionTexts(page.getByLabel('Source', { exact: true }))).toEqual(['All sources', 'Wild in my games', 'Friends have it', 'Trade evolution']);
-    expect(await optionTexts(page.getByLabel('Sort', { exact: true }))).toEqual(['Pokédex number', 'Most friends']);
+    await expectOptions(page.getByLabel('Generation', { exact: true }), ['All generations', ...meta.generations.map((g) => g.displayName)]);
+    await expectOptions(page.getByLabel('Source', { exact: true }), ['All sources', 'Wild in my games', 'Friends have it', 'Trade evolution']);
+    await expectOptions(page.getByLabel('Sort', { exact: true }), ['Pokédex number', 'Most friends']);
   });
 
   test('filters and sorts, in the URL', async ({ page }) => {
@@ -97,15 +97,15 @@ test.describe('Catches', () => {
     await expectHeaders(t, ['Date', 'Pokémon', 'Game', 'Level', 'Method', 'Ball', 'Shiny']);
     await expectRows(t, data.items.map(catchRow));
     await expectHref(t.getByRole('link', { name: data.items[0].game.displayName, exact: true }).first(), `/games/${data.items[0].game.id}`);
-    await expect(m.getByText(pageText(data), { exact: true })).toBeVisible();
+    await expect(phrase(m, pageText(data))).toBeVisible();
   });
 
   test('has labelled filters', async ({ page }) => {
     const meta = await api('/api/meta');
     await page.goto('/catches');
-    expect(await optionTexts(page.getByLabel('Game', { exact: true }))).toEqual(['All games', ...meta.games.map((g) => g.displayName)]);
-    expect(await optionTexts(page.getByLabel('Method', { exact: true }))).toEqual(['All methods', ...meta.catchMethods]);
-    expect(await optionTexts(page.getByLabel('Sort', { exact: true }))).toEqual(['Newest first', 'Oldest first', 'Highest level', 'Lowest level', 'Pokédex number']);
+    await expectOptions(page.getByLabel('Game', { exact: true }), ['All games', ...meta.games.map((g) => g.displayName)]);
+    await expectOptions(page.getByLabel('Method', { exact: true }), ['All methods', ...meta.catchMethods]);
+    await expectOptions(page.getByLabel('Sort', { exact: true }), ['Newest first', 'Oldest first', 'Highest level', 'Lowest level', 'Pokédex number']);
     await expect(page.getByRole('checkbox', { name: 'Shiny only', exact: true })).not.toBeChecked();
   });
 
@@ -139,7 +139,7 @@ test.describe('Catches', () => {
     const last = await api(`/api/catches?method=Raid&page=${first.totalPages}`);
     await page.goto(`/catches?method=Raid&page=${first.totalPages}`);
     await expectRows(table(main(page), 'Catches'), last.items.map(catchRow));
-    await expect(main(page).getByText(pageText(last), { exact: true })).toBeVisible();
+    await expect(phrase(main(page), pageText(last))).toBeVisible();
     await expect(main(page).getByRole('link', { name: 'Next page', exact: true })).toHaveCount(0);
   });
 });
@@ -154,7 +154,7 @@ test.describe('Trades', () => {
     const t = table(m, 'Trades');
     await expectHeaders(t, ['Date', 'Friend', 'Game', 'Gave', 'Received', 'Evolved']);
     await expectRows(t, data.items.map(tradeRow));
-    expect((await rows(t))[0][1]).toBe('Benchmon Fan'); // from tests/fixtures/live-data.sql
+    await expect.poll(async () => (await rows(t))[0]?.[1]).toBe('Benchmon Fan'); // from tests/fixtures/live-data.sql
     const first = data.items[0];
     await expectHref(t.getByRole('link', { name: first.tradedAt, exact: true }).first(), `/trades/${first.id}`);
     await expectHref(t.getByRole('link', { name: first.friend.name, exact: true }).first(), `/friends/${first.friend.id}`);
@@ -163,13 +163,13 @@ test.describe('Trades', () => {
 
   test('has labelled filters', async ({ page }) => {
     const meta = await api('/api/meta');
-    const friends = [...(await api('/api/friends?pageSize=100')).items, ...(await api('/api/friends?pageSize=100&page=2')).items];
+    const friends = (await api('/api/friends?pageSize=200')).items;
     await page.goto('/trades');
-    expect(await optionTexts(page.getByLabel('Friend', { exact: true }))).toEqual(['All friends', ...friends.map((f) => f.friend.name)]);
-    expect(await optionTexts(page.getByLabel('Game', { exact: true }))).toEqual(['All games', ...meta.games.map((g) => g.displayName)]);
+    await expectOptions(page.getByLabel('Friend', { exact: true }), ['All friends', ...friends.map((f) => f.friend.name)]);
+    await expectOptions(page.getByLabel('Game', { exact: true }), ['All games', ...meta.games.map((g) => g.displayName)]);
     const year = Number(meta.today.slice(0, 4));
-    expect(await optionTexts(page.getByLabel('Year', { exact: true }))).toEqual(['All years', ...Array.from({ length: year - 2015 }, (_, i) => String(year - i))]);
-    expect(await optionTexts(page.getByLabel('Sort', { exact: true }))).toEqual(['Newest first', 'Oldest first']);
+    await expectOptions(page.getByLabel('Year', { exact: true }), ['All years', ...Array.from({ length: year - 2015 }, (_, i) => String(year - i))]);
+    await expectOptions(page.getByLabel('Sort', { exact: true }), ['Newest first', 'Oldest first']);
   });
 
   test('filters and sorts, in the URL', async ({ page }) => {
@@ -225,13 +225,13 @@ test.describe('Shiny hunts', () => {
     await expectHeaders(t, ['Pokémon', 'Game', 'Method', 'Started', 'Ended', 'Status', 'Encounters']);
     await expectRows(t, data.items.map(huntRow));
     await expectHref(t.getByRole('link', { name: data.items[0].species.displayName, exact: true }).first(), `/hunts/${data.items[0].id}`);
-    await expect(m.getByText(pageText(data), { exact: true })).toBeVisible();
+    await expect(phrase(m, pageText(data))).toBeVisible();
   });
 
   test('filters by status and sorts, in the URL', async ({ page }) => {
     await page.goto('/hunts');
-    expect(await optionTexts(page.getByLabel('Status', { exact: true }))).toEqual(['All statuses', 'Active', 'Completed', 'Failed']);
-    expect(await optionTexts(page.getByLabel('Sort', { exact: true }))).toEqual(['Newest first', 'Most encounters']);
+    await expectOptions(page.getByLabel('Status', { exact: true }), ['All statuses', 'Active', 'Completed', 'Failed']);
+    await expectOptions(page.getByLabel('Sort', { exact: true }), ['Newest first', 'Most encounters']);
     await page.getByLabel('Status', { exact: true }).selectOption({ label: 'Failed' });
     await expectQuery(page, { status: 'failed' });
     await page.getByLabel('Sort', { exact: true }).selectOption({ label: 'Most encounters' });

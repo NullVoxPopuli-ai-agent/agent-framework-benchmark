@@ -1,7 +1,7 @@
 // Games, friends and Pokémon: the list and detail pages.
 import { test, expect } from '@playwright/test';
 import {
-  api, num, dex, yesNo, orDash, ratioPercents, parts, main, section, table, phrase, rows, optionTexts,
+  api, num, dex, yesNo, orDash, ratioPercents, parts, main, section, table, phrase, rows, expectOptions,
   expectHeaders, expectRows, expectQuery, expectHref, expectDefinitions, expectChart, textOf,
 } from './helpers.mjs';
 
@@ -11,11 +11,10 @@ test.describe('Games', () => {
     await page.goto('/games');
     const t = table(main(page), 'Games');
     await expectHeaders(t, ['Game', 'Platform', 'Copies', 'Playthroughs', 'Hours', 'Started', 'Last played', 'Pokédex', 'Completion']);
-    const found = await rows(t);
-    expect(found.map((r) => r.slice(0, 8))).toEqual(
+    await expect.poll(async () => (await rows(t)).map((r) => r.slice(0, 8))).toEqual(
       items.map((g) => [g.game.displayName, g.platform, num(g.copies), num(g.playthroughs), num(g.hours), g.startedAt, g.lastPlayed, `${num(g.dexCaught)} / ${num(g.dexSize)}`]),
     );
-    found.forEach((r, i) => expect(ratioPercents(items[i].dexCaught, items[i].dexSize)).toContain(r[8]));
+    (await rows(t)).forEach((r, i) => expect(ratioPercents(items[i].dexCaught, items[i].dexSize)).toContain(r[8]));
     await expectHref(t.getByRole('link', { name: items[0].game.displayName, exact: true }), `/games/${items[0].game.id}`);
   });
 
@@ -60,7 +59,7 @@ test.describe('Games', () => {
     await page.goto(`/games/${id}`);
     const s = section(page, 'Pokédex');
     await expect(phrase(s, `${num(g.mine.dexCaught)} of ${num(g.dexSize)} caught`)).toBeVisible();
-    expect(await optionTexts(s.getByLabel('Show', { exact: true }))).toEqual(['All', 'Caught', 'Missing']);
+    await expectOptions(s.getByLabel('Show', { exact: true }), ['All', 'Caught', 'Missing']);
     const t = table(s, 'Regional Pokédex');
     await expectHeaders(t, ['No.', 'Pokémon', 'Caught']);
     await expectRows(t, (await api(`/api/games/${id}/dex`)).items.map(dexRow));
@@ -122,7 +121,7 @@ test.describe('Friends', () => {
 
   test('includes a friend added after the build', async ({ page }) => {
     await page.goto('/friends?sort=last-trade');
-    expect((await rows(table(main(page), 'Friends')))[0][0]).toBe('Benchmon Fan');
+    await expect.poll(async () => (await rows(table(main(page), 'Friends')))[0]?.[0]).toBe('Benchmon Fan');
   });
 
   test('shows a friend', async ({ page }) => {

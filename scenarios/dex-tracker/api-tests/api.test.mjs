@@ -170,7 +170,7 @@ test('paging is consistent', async () => {
   assert.deepEqual(all.items.map((c) => c.id), [...first.items, ...second.items].map((c) => c.id));
   const past = await check(`/api/catches?page=${first.totalPages + 1}`, '/api/catches');
   assert.equal(past.items.length, 0);
-  assert.equal((await api('/api/catches?pageSize=101')).status, 400);
+  assert.equal((await api('/api/catches?pageSize=201')).status, 400);
   assert.equal((await api('/api/catches?page=0')).status, 400);
 });
 
@@ -291,8 +291,8 @@ test('a restart throws writes away, and the overlay changes the data', async () 
   await stopServer(server);
   server = await startServer({ API_OVERLAY: path.join(TEMPLATE, 'tests/fixtures/live-data.sql') });
   const overlaid = (await api('/api/me')).body.stats;
-  assert.equal(overlaid.tradeCount, plain.tradeCount + 1);
-  assert.equal(overlaid.speciesCaught, plain.speciesCaught + 1);
+  assert.equal(overlaid.tradeCount, plain.tradeCount + 3);
+  assert.equal(overlaid.speciesCaught, plain.speciesCaught + 2); // a trade and a catch of needed species
   assert.equal((await api('/api/friends?pageSize=1')).body.total, 151);
   assert.equal((await api('/api/trades?pageSize=1')).body.items[0].friend.name, 'Benchmon Fan');
 });

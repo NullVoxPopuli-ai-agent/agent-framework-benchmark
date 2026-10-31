@@ -270,8 +270,8 @@ images.** They're simple on purpose:
 - Filters (`/api/trades` parameters):
   - `<select>` labelled `Friend`: `All friends`, then every friend by name.
   - `<select>` labelled `Game`: `All games`, then every game from `/api/meta`.
-  - `<select>` labelled `Year`: `All years`, then each year from the current year
-    back to 2016, newest first.
+  - `<select>` labelled `Year`: `All years`, then each year from the year of the data's
+    current date (`today` in `/api/meta`) back to 2016, newest first.
   - A checkbox labelled `Trade evolutions only` (`evolved=true`).
   - `<select>` labelled `Sort`: `Newest first` (`-date`), `Oldest first` (`date`).
 - The text `<total> trades`. With no results, `No trades` in place of the table.

@@ -10,10 +10,10 @@ test.describe('Writes', () => {
     const games = (await api('/api/games')).items;
     const meta = await api('/api/meta');
     await page.goto('/trades/new');
-    const friends = await optionTexts(page.getByLabel('Friend', { exact: true }));
-    expect(friends).toContain('Benchmon Fan');
-    expect(friends.length).toBeGreaterThanOrEqual(151);
-    expect((await optionTexts(page.getByLabel('Game', { exact: true }))).filter((o) => o)).toEqual(games.map((g) => g.game.displayName));
+    const friend = page.getByLabel('Friend', { exact: true });
+    await expect.poll(async () => (await optionTexts(friend)).includes('Benchmon Fan')).toBe(true);
+    expect((await optionTexts(friend)).length).toBeGreaterThanOrEqual(151);
+    await expect.poll(async () => (await optionTexts(page.getByLabel('Game', { exact: true }))).filter((o) => o)).toEqual(games.map((g) => g.game.displayName));
     await expect(page.getByLabel('Date', { exact: true })).toHaveValue(meta.today);
   });
 
@@ -42,7 +42,7 @@ test.describe('Writes', () => {
 
     // Pages the app may have cached must show the new trade.
     await page.goto('/trades');
-    expect((await rows(table(main(page), 'Trades')))[0].slice(1, 5)).toEqual(['Benchmon Fan', game.displayName, 'Pikachu', 'Mr. Mime']);
+    await expect.poll(async () => (await rows(table(main(page), 'Trades')))[0]?.slice(1, 5)).toEqual(['Benchmon Fan', game.displayName, 'Pikachu', 'Mr. Mime']);
     await page.goto('/');
     await expect(section(page, 'Summary').getByRole('definition').nth(2)).toHaveText(num(before.tradeCount + 1));
     await expect(section(page, 'Recent activity').getByRole('listitem').first()).toContainText('Traded Pikachu to Benchmon Fan for Mr. Mime');

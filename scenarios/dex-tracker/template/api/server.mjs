@@ -120,7 +120,7 @@ function generationParam(url) {
 // Paging: ?page (1-based) and ?pageSize. Returns the response envelope around `rows`.
 function paging(url, defaultSize) {
   const page = intParam(url, 'page', { fallback: 1 });
-  const pageSize = intParam(url, 'pageSize', { max: 100, fallback: defaultSize });
+  const pageSize = intParam(url, 'pageSize', { max: 200, fallback: defaultSize });
   return {
     page,
     pageSize,
@@ -525,6 +525,7 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Max-Age': '7200', // Chrome's limit; spares browser-side apps a preflight per URL
 };
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
 const delay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : undefined);

@@ -17,3 +17,15 @@ INSERT INTO catch (species_id, game_id, caught_at, level, shiny, method, ball, n
 
 -- Every active shiny hunt has had more encounters since.
 UPDATE hunt SET encounters = encounters + 1000 WHERE status = 'active';
+
+-- Yesterday's activity, so detail pages change too (dated yesterday so the trade above stays
+-- the newest). Friend 1 traded the trainer an Eevee for a Slowpoke in Red; friend 8 traded a
+-- Slowpoke for a Pikachu in Blue; and a Nidoran♂ (needed until now) was caught in Blue.
+INSERT INTO trade (id, traded_at, friend_id, game_id, gave_id, received_id, evolved)
+  SELECT (SELECT MAX(id) + 1 FROM trade), date(value, '-1 day'), 1, 'red', 79, 133, 0 FROM meta WHERE key = 'today';
+INSERT INTO trade (id, traded_at, friend_id, game_id, gave_id, received_id, evolved)
+  SELECT (SELECT MAX(id) + 1 FROM trade), date(value, '-1 day'), 8, 'blue', 25, 79, 0 FROM meta WHERE key = 'today';
+INSERT INTO catch (species_id, game_id, caught_at, level, shiny, method, ball, nickname, trade_id, hunt_id)
+  SELECT received_id, game_id, traded_at, 1, 0, 'Trade', NULL, NULL, id, NULL FROM trade WHERE id > (SELECT MAX(id) - 2 FROM trade);
+INSERT INTO catch (species_id, game_id, caught_at, level, shiny, method, ball, nickname, trade_id, hunt_id)
+  SELECT 32, 'blue', date(value, '-1 day'), 12, 0, 'Wild', 'Poké Ball', NULL, NULL, NULL FROM meta WHERE key = 'today';
