@@ -111,7 +111,7 @@ function codeStats() {
   const provided = new Set(fs.readdirSync(designDir).filter((f) => f.endsWith('.css')).map((f) => fs.readFileSync(path.join(designDir, f), 'utf8')));
   let lines = 0;
   for (const f of files) {
-    if (!/\.([cm]?[jt]sx?|vue|svelte|astro|html|css|scss)$/.test(f) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(f)) continue;
+    if (!/\.([cm]?[jt]sx?|gjs|gts|vue|svelte|astro|html|css|scss)$/.test(f) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(f)) continue;
     const text = fs.readFileSync(path.join(appDir, f), 'utf8');
     if (provided.has(text) || /automatically generated|auto-generated|@generated|do not edit/i.test(text.slice(0, 500))) continue;
     lines += text.split('\n').filter((l) => l.trim()).length;

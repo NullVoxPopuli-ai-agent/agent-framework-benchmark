@@ -49,7 +49,7 @@ Agents, and the apps they write, only ever run inside containers.
 
 | Option | Default | |
 | --- | --- | --- |
-| `--frameworks=a,b` or `all` | (required) | Keys from `bench/frameworks.mjs`: `next`, `nuxt`, `tanstack-start`, `react-router`, `solidstart`, `sveltekit`, `angular`, `astro`, `qwik`, `gracile`, `hono-htmx`, `vanilla` |
+| `--frameworks=a,b` or `all` | (required) | Keys from `bench/frameworks.mjs`: `next`, `nuxt`, `tanstack-start`, `react-router`, `solidstart`, `sveltekit`, `angular`, `astro`, `qwik`, `gracile`, `hono-htmx`, `ember`, `vanilla` |
 | `--iterations=N` | 1 | Agent runs per framework |
 | `--model=ID` | `claude-opus-5-5` | Passed to `claude --model` |
 | `--effort=LEVEL` | `medium` | Passed to `claude --effort` (`low`, `medium`, `high`, `xhigh`, `max`) |
@@ -144,7 +144,7 @@ the tooling; whether they do is recorded (MCP and skill calls are in the transcr
 | React Router | React Router skill (the one `create-react-router` adds to new apps); docs ship in `node_modules` |
 | Hono + htmx | Hono skills (nothing official for htmx) |
 | TanStack Start | None. Its packages ship skills in `node_modules` (TanStack Intent), and `@tanstack/cli create` tries to wire them up, but that step needs an interactive terminal and fails in non-interactive use. Start's docs don't mention them |
-| SolidStart, Qwik, Gracile + Lit, vanilla | None (only community-made tooling exists) |
+| SolidStart, Qwik, Gracile + Lit, Ember, vanilla | None (only community-made tooling exists) |
 
 ## Reading a run
 
