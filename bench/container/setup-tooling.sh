@@ -92,7 +92,7 @@ case "$FRAMEWORK" in
     # up front because agents don't always use create-react-router. Docs ship in node_modules.
     skill remix-run/react-router --skill react-router
     ;;
-  tanstack-start | solidstart | qwik | gracile | ember | ember-ssr | vanilla)
+  tanstack-start | solidstart | qwik | gracile | ember | ember-ssr | ember-cli | vanilla)
     # No official agent tooling (TanStack removed its MCP server in favour of its CLI).
     ;;
   *)
